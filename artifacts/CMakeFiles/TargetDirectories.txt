@@ -1,0 +1,3 @@
+/home/hekapoo/Documents/probe/json/artifacts/CMakeFiles/json.dir
+/home/hekapoo/Documents/probe/json/artifacts/CMakeFiles/edit_cache.dir
+/home/hekapoo/Documents/probe/json/artifacts/CMakeFiles/rebuild_cache.dir

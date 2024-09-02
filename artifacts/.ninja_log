@@ -1,0 +1,4 @@
+# ninja log v5
+2052	2136	1725264708871099326	/home/hekapoo/Documents/probe/json/debug/json	51d7bf3a62430cc5
+1	2052	1725264708786098413	CMakeFiles/json.dir/src/Utility.cpp.o	90fe5501ca70abd2
+1	1892	1725264708628096714	CMakeFiles/json.dir/src/main.cpp.o	9901c05c9837d45e

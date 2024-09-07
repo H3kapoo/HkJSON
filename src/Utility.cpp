@@ -5,6 +5,11 @@
 namespace utils
 {
 
+bool isNextEOF(std::ifstream& stream)
+{
+    return stream.peek() == EOF;
+}
+
 uint8_t peek1(std::ifstream& stream)
 {
     return stream.peek();

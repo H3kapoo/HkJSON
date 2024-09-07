@@ -68,6 +68,11 @@ template <typename... Args> void println(std::format_string<Args...> fmt, Args&&
 #endif // NEW_PRINT
 
 /**
+    @brief Read 1 byte and tell if stream has ended
+*/
+bool isNextEOF(std::ifstream& stream);
+
+/**
     @brief Read 1 byte from _stream_ and return uint8_t
 */
 uint8_t peek1(std::ifstream& stream);

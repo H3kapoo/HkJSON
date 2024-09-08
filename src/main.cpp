@@ -1,4 +1,3 @@
-#include "Utility.hpp"
 #include <cstdint>
 #include <fstream>
 #include <memory>
@@ -7,6 +6,8 @@
 #include <utility>
 #include <variant>
 
+#include "Utility.hpp"
+
 namespace hk
 {
 
@@ -14,41 +15,184 @@ struct Json
 {
 #define JSON_CHANGE_STATE(x) changeState(state, x, __LINE__);
 
+#define JSON_GET_MAP_FIELD_VALUE(returnType, funcName)                                                                 \
+    returnType funcName(const std::string& key) const                                                                  \
+    {                                                                                                                  \
+        FieldValue fv;                                                                                                 \
+        returnType retVal;                                                                                             \
+        try                                                                                                            \
+        {                                                                                                              \
+            fv = at(key);                                                                                              \
+        }                                                                                                              \
+        catch (const std::exception& e)                                                                                \
+        {                                                                                                              \
+            std::string errBuff;                                                                                       \
+            sprint(errBuff, #funcName "{%s} value not in object", key.c_str());                                        \
+            throw std::runtime_error(errBuff);                                                                         \
+        }                                                                                                              \
+        try                                                                                                            \
+        {                                                                                                              \
+            retVal = std::get<returnType>(fv);                                                                         \
+        }                                                                                                              \
+        catch (const std::exception& e)                                                                                \
+        {                                                                                                              \
+            std::string errBuff;                                                                                       \
+            sprint(errBuff, #funcName "{%s} value not " #returnType, key.c_str());                                     \
+            throw std::runtime_error(errBuff);                                                                         \
+        }                                                                                                              \
+        return retVal;                                                                                                 \
+    }
+
+#define JSON_GET_LIST_FIELD_VALUE(returnType, funcName)                                                                \
+    returnType funcName(const int64_t index) const                                                                     \
+    {                                                                                                                  \
+        FieldValue fv;                                                                                                 \
+        returnType retVal;                                                                                             \
+        try                                                                                                            \
+        {                                                                                                              \
+            fv = at(index);                                                                                            \
+        }                                                                                                              \
+        catch (const std::exception& e)                                                                                \
+        {                                                                                                              \
+            std::string errBuff;                                                                                       \
+            sprint(errBuff, #funcName "[%ld] value not in list", index);                                               \
+            throw std::runtime_error(errBuff);                                                                         \
+        }                                                                                                              \
+        try                                                                                                            \
+        {                                                                                                              \
+            retVal = std::get<returnType>(fv);                                                                         \
+        }                                                                                                              \
+        catch (const std::exception& e)                                                                                \
+        {                                                                                                              \
+            std::string errBuff;                                                                                       \
+            sprint(errBuff, #funcName "[%ld] value not " #returnType, index);                                          \
+            throw std::runtime_error(errBuff);                                                                         \
+        }                                                                                                              \
+        return retVal;                                                                                                 \
+    }
+
+#define JSON_IS_MAP_FIELD_OF_TYPE(type, funcName)                                                                      \
+    bool funcName(const std::string& key) const                                                                        \
+    {                                                                                                                  \
+        FieldValue fv;                                                                                                 \
+        try                                                                                                            \
+        {                                                                                                              \
+            fv = at(key);                                                                                              \
+        }                                                                                                              \
+        catch (const std::exception& e)                                                                                \
+        {                                                                                                              \
+            return false;                                                                                              \
+        }                                                                                                              \
+        try                                                                                                            \
+        {                                                                                                              \
+            std::get<type>(fv);                                                                                        \
+        }                                                                                                              \
+        catch (const std::exception& e)                                                                                \
+        {                                                                                                              \
+            return false;                                                                                              \
+        }                                                                                                              \
+        return true;                                                                                                   \
+    }
+
+#define JSON_IS_LIST_FIELD_OF_TYPE(type, funcName)                                                                     \
+    bool funcName(const int64_t index) const                                                                           \
+    {                                                                                                                  \
+        FieldValue fv;                                                                                                 \
+        try                                                                                                            \
+        {                                                                                                              \
+            fv = at(index);                                                                                            \
+        }                                                                                                              \
+        catch (const std::exception& e)                                                                                \
+        {                                                                                                              \
+            return false;                                                                                              \
+        }                                                                                                              \
+        try                                                                                                            \
+        {                                                                                                              \
+            std::get<type>(fv);                                                                                        \
+        }                                                                                                              \
+        catch (const std::exception& e)                                                                                \
+        {                                                                                                              \
+            return false;                                                                                              \
+        }                                                                                                              \
+        return true;                                                                                                   \
+    }
+
     struct JsonObjectNode;
     struct JsonListNode;
+
+    struct JsonNull
+    {};
 
     using JsonObjectNodeSPtr = std::shared_ptr<JsonObjectNode>;
     using JsonListNodeSPtr = std::shared_ptr<JsonListNode>;
 
-    using FieldValue = std::variant<double, std::string, JsonObjectNode, JsonListNode>;
+    using FieldValue = std::variant<bool, double, int64_t, std::string, JsonObjectNode, JsonListNode, JsonNull>;
 
     struct JsonObjectNode : public std::unordered_map<std::string, FieldValue>
-    {};
+    {
+        JSON_GET_MAP_FIELD_VALUE(bool, getBool);
+        JSON_GET_MAP_FIELD_VALUE(double, getDouble);
+        JSON_GET_MAP_FIELD_VALUE(int64_t, getInt);
+        JSON_GET_MAP_FIELD_VALUE(std::string, getString);
+        JSON_GET_MAP_FIELD_VALUE(JsonObjectNode, getObject);
+        JSON_GET_MAP_FIELD_VALUE(JsonListNode, getList);
 
-    using JsonNode = std::variant<JsonObjectNode, JsonListNode>;
+        JSON_IS_MAP_FIELD_OF_TYPE(bool, isBool);
+        JSON_IS_MAP_FIELD_OF_TYPE(double, isDouble);
+        JSON_IS_MAP_FIELD_OF_TYPE(int64_t, isInt);
+        JSON_IS_MAP_FIELD_OF_TYPE(std::string, isString);
+        JSON_IS_MAP_FIELD_OF_TYPE(JsonObjectNode, isObject);
+        JSON_IS_MAP_FIELD_OF_TYPE(JsonListNode, isList);
+        JSON_IS_MAP_FIELD_OF_TYPE(JsonNull, isNull);
+    };
 
     struct JsonListNode : public std::vector<FieldValue>
-    {};
+    {
+        JSON_GET_LIST_FIELD_VALUE(bool, getBool);
+        JSON_GET_LIST_FIELD_VALUE(double, getDouble);
+        JSON_GET_LIST_FIELD_VALUE(int64_t, getInt);
+        JSON_GET_LIST_FIELD_VALUE(std::string, getString);
+        JSON_GET_LIST_FIELD_VALUE(JsonObjectNode, getObject);
+        JSON_GET_LIST_FIELD_VALUE(JsonListNode, getList);
+
+        JSON_IS_LIST_FIELD_OF_TYPE(bool, isBool);
+        JSON_IS_LIST_FIELD_OF_TYPE(double, isDouble);
+        JSON_IS_LIST_FIELD_OF_TYPE(int64_t, isInt);
+        JSON_IS_LIST_FIELD_OF_TYPE(std::string, isString);
+        JSON_IS_LIST_FIELD_OF_TYPE(JsonObjectNode, isObject);
+        JSON_IS_LIST_FIELD_OF_TYPE(JsonListNode, isList);
+        JSON_IS_LIST_FIELD_OF_TYPE(JsonNull, isNull);
+    };
+
+    struct JsonNode : public std::variant<JsonObjectNode, JsonListNode>
+    {
+
+        JsonListNode operator[](const uint64_t)
+        {
+            if (!std::holds_alternative<JsonListNode>(*this))
+            {
+                return JsonListNode{};
+            }
+
+            return std::get<JsonListNode>(*this);
+        }
+
+        JsonObjectNode operator[](const std::string)
+        {
+            if (!std::holds_alternative<JsonObjectNode>(*this))
+            {
+                return JsonObjectNode{};
+            }
+
+            return std::get<JsonObjectNode>(*this);
+        }
+    };
 
     using JsonNodeSPtr = std::shared_ptr<JsonNode>;
     using JsonNodeWPtr = std::weak_ptr<JsonNode>;
 
     enum class State
     {
-        IDLE,
-        AQUIRED_OPENING_CURLY_TOKEN,
-        AQUIRED_OPENING_SQUARE_TOKEN,
-        GET_CLOSING_CURLY_TOKEN,
-        GET_CLOSING_SQUARE_TOKEN,
-        AQUIRED_CLOSING_TOKEN,
-        GET_KEY_NAME,
-        AQUIRED_KEY_NAME,
-        GET_KEY_VALUE,
-        AQUIRED_KEY_VALUE,
-        GET_KEY_STRING_VALUE,
-        GET_KEY_MAP_VALUE,
-        GET_KEY_LIST_VALUE,
-
         ERROR,
         GET_OPENING_TOKEN,
         GOT_CURLY_OPENING_TOKEN,
@@ -90,7 +234,12 @@ struct Json
 
         // list list value
         GOT_BRAKET_BRAKET_OPENING_TOKEN,
-        GOT_BRAKET_BRAKET_CLOSING_TOKEN
+        GOT_BRAKET_BRAKET_CLOSING_TOKEN,
+
+        // special tokens
+        GOT_NULL_TOKEN,
+        GOT_TRUE_TOKEN,
+        GOT_FALSE_TOKEN
     };
 
     struct JsonResult
@@ -110,23 +259,40 @@ struct Json
 
         const auto result = parseStream(jsonFile);
 
-        if (result.error.empty())
+        if (result.error.empty() && result.json != nullptr)
         {
             printJson(*result.json);
+            printf("\n");
+
+            JsonNode n = (*result.json);
+
+            try
+            {
+                auto fv = n[""].getObject("company").getList("departments").getObject(0).getString("name");
+                // auto fv = n[""].getObject("company").getString("name");
+                // auto fv = n[0].getInt(0);
+
+                printlne("%s", fv.c_str());
+            }
+            catch (const std::exception& e)
+            {
+                printlne("what -> %s", e.what());
+            }
         }
         else
         {
             printlne("%s", result.error.c_str());
+            printf("\n");
         }
-        printf("\n");
         return true;
     }
 
     JsonResult parseStream(std::ifstream& stream, const bool returnEarly = false)
     {
-        char currentChar{};
+        char currentChar{0};
         std::string primaryAcc{};
         std::string secondaryAcc{};
+        bool holdsObject{false};
 
         State state{State::GET_OPENING_TOKEN};
 
@@ -148,6 +314,7 @@ struct Json
             switch (currentChar)
             {
                 /* Dump away any spaces and new lines */
+                // TODO: accumulate spaces when in "string gathering" mode
                 case ' ':
                 case '\n': {
                     break;
@@ -159,6 +326,7 @@ struct Json
                     {
                         JSON_CHANGE_STATE(State::GOT_CURLY_OPENING_TOKEN);
                         currentNode = std::make_shared<JsonNode>(JsonObjectNode{});
+                        holdsObject = true;
                     }
                     else if (state == State::GOT_DOUBLE_DOT_SEPATATOR)
                     {
@@ -198,6 +366,7 @@ struct Json
                     {
                         JSON_CHANGE_STATE(State::GOT_BRAKET_OPENING_TOKEN);
                         currentNode = std::make_shared<JsonNode>(JsonListNode{});
+                        holdsObject = false;
                     }
                     else if (state == State::GOT_DOUBLE_DOT_SEPATATOR)
                     {
@@ -237,13 +406,22 @@ struct Json
                     if (state == State::GOT_CURLY_OPENING_TOKEN || state == State::GOT_STRING_KEY_VALUE_CLOSING_QUOTE ||
                         state == State::GOT_MAP_KEY_VALUE_CLOSING_CURLY ||
                         state == State::GOT_LIST_KEY_VALUE_CLOSING_BRAKET ||
-                        state == State::GETTING_NUMBER_KEY_VALUE_CHARS)
+                        state == State::GETTING_NUMBER_KEY_VALUE_CHARS || state == State::GOT_TRUE_TOKEN ||
+                        state == State::GOT_FALSE_TOKEN || state == State::GOT_NULL_TOKEN)
                     {
                         if (state == State::GETTING_NUMBER_KEY_VALUE_CHARS)
                         {
                             printlne("number: %s", secondaryAcc.c_str());
-                            double theNumber = std::stod(secondaryAcc);
-                            std::get<JsonObjectNode>(*currentNode)[primaryAcc] = theNumber;
+                            if (secondaryAcc.contains('.'))
+                            {
+                                double theNumber = std::stod(secondaryAcc);
+                                std::get<JsonObjectNode>(*currentNode)[primaryAcc] = theNumber;
+                            }
+                            else
+                            {
+                                int64_t theNumber = std::stoi(secondaryAcc);
+                                std::get<JsonObjectNode>(*currentNode)[primaryAcc] = theNumber;
+                            }
                             primaryAcc.clear();
                             secondaryAcc.clear();
                         }
@@ -261,13 +439,23 @@ struct Json
                     if (state == State::GOT_BRAKET_OPENING_TOKEN || state == State::GOT_BRAKET_STRING_CLOSING_QUOTE ||
                         state == State::GOT_BRAKET_CURLY_CLOSING_TOKEN ||
                         state == State::GOT_BRAKET_BRAKET_CLOSING_TOKEN ||
-                        state == State::GETTING_NUMBER_KEY_VALUE_CHARS)
+                        state == State::GETTING_NUMBER_KEY_VALUE_CHARS || state == State::GOT_TRUE_TOKEN ||
+                        state == State::GOT_FALSE_TOKEN || state == State::GOT_NULL_TOKEN)
                     {
                         if (state == State::GETTING_NUMBER_KEY_VALUE_CHARS)
                         {
                             printlne("number: %s", secondaryAcc.c_str());
-                            double theNumber = std::stod(secondaryAcc);
-                            std::get<JsonListNode>(*currentNode).push_back(theNumber);
+
+                            if (secondaryAcc.contains('.'))
+                            {
+                                double theNumber = std::stod(secondaryAcc);
+                                std::get<JsonListNode>(*currentNode).push_back(theNumber);
+                            }
+                            else
+                            {
+                                int64_t theNumber = std::stoi(secondaryAcc);
+                                std::get<JsonListNode>(*currentNode).push_back(theNumber);
+                            }
                             primaryAcc.clear();
                             secondaryAcc.clear();
                         }
@@ -329,14 +517,23 @@ struct Json
                     if (state == State::GOT_STRING_KEY_VALUE_CLOSING_QUOTE ||
                         state == State::GOT_MAP_KEY_VALUE_CLOSING_CURLY ||
                         state == State::GOT_LIST_KEY_VALUE_CLOSING_BRAKET ||
-                        (state == State::GETTING_NUMBER_KEY_VALUE_CHARS &&
-                            std::holds_alternative<JsonObjectNode>(*currentNode)))
+                        ((state == State::GOT_TRUE_TOKEN || state == State::GOT_FALSE_TOKEN ||
+                             state == State::GOT_NULL_TOKEN || state == State::GETTING_NUMBER_KEY_VALUE_CHARS) &&
+                            holdsObject))
                     {
                         if (state == State::GETTING_NUMBER_KEY_VALUE_CHARS)
                         {
                             printlne("number: %s", secondaryAcc.c_str());
-                            double theNumber = std::stod(secondaryAcc);
-                            std::get<JsonObjectNode>(*currentNode)[primaryAcc] = theNumber;
+                            if (secondaryAcc.contains('.'))
+                            {
+                                double theNumber = std::stod(secondaryAcc);
+                                std::get<JsonObjectNode>(*currentNode)[primaryAcc] = theNumber;
+                            }
+                            else
+                            {
+                                int64_t theNumber = std::stoi(secondaryAcc);
+                                std::get<JsonObjectNode>(*currentNode)[primaryAcc] = theNumber;
+                            }
                             primaryAcc.clear();
                             secondaryAcc.clear();
                         }
@@ -347,14 +544,23 @@ struct Json
                     else if (state == State::GOT_BRAKET_STRING_CLOSING_QUOTE ||
                              state == State::GOT_BRAKET_CURLY_CLOSING_TOKEN ||
                              state == State::GOT_BRAKET_BRAKET_CLOSING_TOKEN ||
-                             (state == State::GETTING_NUMBER_KEY_VALUE_CHARS &&
-                                 std::holds_alternative<JsonListNode>(*currentNode)))
+                             ((state == State::GOT_TRUE_TOKEN || state == State::GOT_FALSE_TOKEN ||
+                                  state == State::GOT_NULL_TOKEN || state == State::GETTING_NUMBER_KEY_VALUE_CHARS) &&
+                                 !holdsObject))
                     {
                         if (state == State::GETTING_NUMBER_KEY_VALUE_CHARS)
                         {
                             printlne("number: %s", secondaryAcc.c_str());
-                            double theNumber = std::stod(secondaryAcc);
-                            std::get<JsonListNode>(*currentNode).push_back(theNumber);
+                            if (secondaryAcc.contains('.'))
+                            {
+                                double theNumber = std::stod(secondaryAcc);
+                                std::get<JsonListNode>(*currentNode).push_back(theNumber);
+                            }
+                            else
+                            {
+                                int64_t theNumber = std::stoi(secondaryAcc);
+                                std::get<JsonListNode>(*currentNode).push_back(theNumber);
+                            }
                             primaryAcc.clear();
                             secondaryAcc.clear();
                         }
@@ -402,6 +608,106 @@ struct Json
                             JSON_CHANGE_STATE(State::GETTING_NUMBER_KEY_VALUE_CHARS);
                             secondaryAcc += currentChar;
                         }
+                        else if (currentChar == 'n')
+                        {
+                            int8_t readBackChars{0};
+                            if (utils::read1(stream) == 'u')
+                            {
+                                readBackChars++;
+                                if (utils::read1(stream) == 'l')
+                                {
+                                    readBackChars++;
+                                    if (utils::read1(stream) == 'l')
+                                    {
+                                        readBackChars++;
+                                        if (state == State::GOT_DOUBLE_DOT_SEPATATOR)
+                                        {
+                                            std::get<JsonObjectNode>(*currentNode)[primaryAcc] = JsonNull{};
+                                            primaryAcc.clear();
+                                        }
+                                        else if (state == State::GOT_BRAKET_OPENING_TOKEN)
+                                        {
+                                            std::get<JsonListNode>(*currentNode).push_back(JsonNull{});
+                                        }
+
+                                        JSON_CHANGE_STATE(State::GOT_NULL_TOKEN);
+                                    }
+                                }
+                            }
+
+                            if (state != State::GOT_TRUE_TOKEN)
+                            {
+                                stream.seekg(-readBackChars, std::ios::cur);
+                            }
+                        }
+                        else if (currentChar == 't')
+                        {
+                            int8_t readBackChars{0};
+                            if (utils::read1(stream) == 'r')
+                            {
+                                readBackChars++;
+                                if (utils::read1(stream) == 'u')
+                                {
+                                    readBackChars++;
+                                    if (utils::read1(stream) == 'e')
+                                    {
+                                        readBackChars++;
+                                        if (state == State::GOT_DOUBLE_DOT_SEPATATOR)
+                                        {
+                                            std::get<JsonObjectNode>(*currentNode)[primaryAcc] = true;
+                                            primaryAcc.clear();
+                                        }
+                                        else if (state == State::GOT_BRAKET_OPENING_TOKEN)
+                                        {
+                                            std::get<JsonListNode>(*currentNode).push_back(true);
+                                        }
+
+                                        JSON_CHANGE_STATE(State::GOT_TRUE_TOKEN);
+                                    }
+                                }
+                            }
+
+                            if (state != State::GOT_TRUE_TOKEN)
+                            {
+                                stream.seekg(-readBackChars, std::ios::cur);
+                            }
+                        }
+                        else if (currentChar == 'f')
+                        {
+                            int8_t readBackChars{0};
+                            if (utils::read1(stream) == 'a')
+                            {
+                                readBackChars++;
+                                if (utils::read1(stream) == 'l')
+                                {
+                                    readBackChars++;
+                                    if (utils::read1(stream) == 's')
+                                    {
+                                        readBackChars++;
+                                        if (utils::read1(stream) == 'e')
+                                        {
+                                            readBackChars++;
+                                            if (state == State::GOT_DOUBLE_DOT_SEPATATOR)
+                                            {
+                                                std::get<JsonObjectNode>(*currentNode)[primaryAcc] = false;
+                                                primaryAcc.clear();
+                                            }
+                                            else if (state == State::GOT_BRAKET_OPENING_TOKEN)
+                                            {
+                                                std::get<JsonListNode>(*currentNode).push_back(false);
+                                            }
+
+                                            JSON_CHANGE_STATE(State::GOT_FALSE_TOKEN);
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (state != State::GOT_FALSE_TOKEN)
+                            {
+                                stream.seekg(-readBackChars, std::ios::cur);
+                            }
+                        }
                     }
                     else if (state == State::GETTING_NUMBER_KEY_VALUE_CHARS)
                     {
@@ -412,7 +718,7 @@ struct Json
             }
         }
 
-        if (state != State::GOT_CURLY_CLOSING_TOKEN && state != State::GOT_BRAKET_CLOSING_TOKEN)
+        if (currentChar != 0 && state != State::GOT_CURLY_CLOSING_TOKEN && state != State::GOT_BRAKET_CLOSING_TOKEN)
         {
             JSON_CHANGE_STATE(State::ERROR);
             return {nullptr, "Ending curly or square bracket not found"};
@@ -420,439 +726,6 @@ struct Json
 
         return {currentNode, ""};
     }
-
-    JsonResult parseJsonObjectStream(std::ifstream& stream)
-    {
-        // while (!utils::isNextEOF(stream)) {}
-        return {nullptr, ""};
-    }
-
-    // std::pair<JsonNodeSPtr, std::string> parseStream2(std::ifstream& stream)
-    // {
-    //     uint8_t ch{};
-    //     std::string charAcc{};
-    //     std::string keyNameAcc{};
-    //     State state{State::GET_OPENING_TOKEN};
-    //     bool aquiredOpeningTokenDueToComma{false};
-    //     bool isCurly{false};
-    //     JsonNodeSPtr currentNode; // = std::make_shared<JsonNode>();
-
-    //     while (!utils::isNextEOF(stream))
-    //     {
-    //         if (state == State::ERROR)
-    //         {
-    //             return {nullptr, "some error occured"};
-    //             break;
-    //         }
-
-    //         ch = utils::read1(stream);
-    //         switch (ch)
-    //         {
-    //             case ' ':
-    //             case '\n': {
-    //                 // println("Skipped space or newline");
-    //                 break;
-    //             }
-    //             case '{':
-    //                 /* A valid object can start with { */
-    //                 if (state == State::GET_OPENING_TOKEN)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::AQUIRED_OPENING_CURLY_TOKEN);
-    //                     isCurly = true;
-    //                 }
-    //                 /* Hitting { on this state means value of the key is another object. We need to recurse down.*/
-    //                 if (state == State::GET_KEY_VALUE || state == State::AQUIRED_OPENING_SQUARE_TOKEN)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::GET_KEY_MAP_VALUE);
-
-    //                     stream.seekg(-1, std::ios::cur);
-    //                     const auto& [returnedNode, error] = parseStream(stream);
-
-    //                     if (state == State::GET_KEY_VALUE)
-    //                     {
-    //                         stream.seekg(-1, std::ios::cur);
-    //                     }
-
-    //                     if (!error.empty())
-    //                     {
-    //                         JSON_CHANGE_STATE(State::ERROR);
-    //                         break;
-    //                     }
-
-    //                     if (!currentNode)
-    //                     {
-    //                         currentNode = std::make_shared<JsonNode>(JsonObjectNode{});
-    //                     }
-
-    //                     if (std::holds_alternative<JsonListNode>(*currentNode) &&
-    //                         std::holds_alternative<JsonObjectNode>(*returnedNode))
-    //                     {
-    //                         std::get<JsonListNode>(*currentNode).emplace_back(std::get<JsonObjectNode>(*returnedNode));
-    //                     }
-    //                     else if (std::holds_alternative<JsonObjectNode>(*currentNode) &&
-    //                              std::holds_alternative<JsonListNode>(*returnedNode))
-    //                     {
-    //                         std::get<JsonObjectNode>(*currentNode)[keyNameAcc] =
-    //                         std::get<JsonListNode>(*returnedNode);
-    //                     }
-
-    //                     charAcc.clear();
-    //                     keyNameAcc.clear();
-    //                 }
-    //                 break;
-    //             case '}': {
-    //                 /* Object should be completed in this case. */
-    //                 if (state == State::AQUIRED_KEY_VALUE)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::AQUIRED_CLOSING_TOKEN);
-    //                     // we should stop right here. We have completed the object
-    //                     println("RETURNING");
-    //                     return {currentNode, ""};
-    //                 }
-    //                 /* Hitting } here means closing " is wrongly placed or missing. */
-    //                 else if (state == State::GET_KEY_STRING_VALUE)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::ERROR);
-    //                     printlne("Missing closing \" while aquiring string value for key");
-    //                 }
-    //                 else if (state == State::AQUIRED_OPENING_CURLY_TOKEN)
-    //                 {
-    //                     /* } while we already got { AND holding some type in the variant it can only mean we have a
-    //                     bad
-    //                      * comma after a value of a key. */
-    //                     if (aquiredOpeningTokenDueToComma)
-    //                     {
-    //                         JSON_CHANGE_STATE(State::ERROR);
-    //                         printlne("Missplaced , after last element of object");
-    //                     }
-    //                     /* Otherwise it can be just the closing of an empty object. */
-    //                     else
-    //                     {
-    //                         JSON_CHANGE_STATE(State::AQUIRED_CLOSING_TOKEN);
-    //                         if (!currentNode)
-    //                         {
-    //                             currentNode = std::make_shared<JsonNode>(JsonObjectNode{});
-    //                         }
-
-    //                         println("RETURNING 2");
-    //                         return {currentNode, ""};
-    //                     }
-    //                 }
-    //                 /* Hitting } after we recursed down the object means we now need to close it. */
-    //                 else if (state == State::GET_KEY_MAP_VALUE)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::AQUIRED_KEY_VALUE);
-    //                 }
-    //                 break;
-    //             }
-    //             case '[':
-    //                 /* A valid list can start with [ */
-    //                 if (state == State::GET_OPENING_TOKEN)
-    //                 {
-    //                     if (!currentNode)
-    //                     {
-    //                         currentNode = std::make_shared<JsonNode>(JsonListNode{});
-    //                     }
-    //                     JSON_CHANGE_STATE(State::AQUIRED_OPENING_SQUARE_TOKEN);
-    //                 }
-    //                 else if (state == State::AQUIRED_OPENING_CURLY_TOKEN)
-    //                 {
-    //                     printlne("Cannot have list directly inside object");
-    //                     JSON_CHANGE_STATE(State::ERROR);
-    //                 }
-    //                 else if (state == State::GET_KEY_VALUE)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::GET_KEY_LIST_VALUE);
-
-    //                     stream.seekg(-1, std::ios::cur);
-    //                     const auto& [returnedNode, error] = parseStream(stream);
-    //                     stream.seekg(-1, std::ios::cur);
-
-    //                     if (!error.empty())
-    //                     {
-    //                         JSON_CHANGE_STATE(State::ERROR);
-    //                         break;
-    //                     }
-
-    //                     if (!currentNode)
-    //                     {
-    //                         currentNode = std::make_shared<JsonNode>(JsonObjectNode{});
-    //                     }
-
-    //                     if (std::holds_alternative<JsonObjectNode>(*returnedNode))
-    //                     {
-    //                         std::get<JsonListNode>(*currentNode).emplace_back(std::get<JsonObjectNode>(*returnedNode));
-    //                     }
-    //                     else if (std::holds_alternative<JsonListNode>(*returnedNode))
-    //                     {
-    //                         std::get<JsonObjectNode>(*currentNode)[keyNameAcc] =
-    //                         std::get<JsonListNode>(*returnedNode);
-    //                     }
-
-    //                     charAcc.clear();
-    //                     keyNameAcc.clear();
-    //                 }
-    //                 break;
-    //             case ']':
-    //                 /* A valid list can end with ] */
-    //                 if (state == State::AQUIRED_OPENING_SQUARE_TOKEN)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::AQUIRED_CLOSING_TOKEN);
-    //                     if (!currentNode)
-    //                     {
-    //                         currentNode = std::make_shared<JsonNode>(JsonListNode{});
-    //                     }
-
-    //                     println("RETURNING SQ 2");
-    //                     return {currentNode, ""};
-    //                 }
-    //                 else if (state == State::AQUIRED_KEY_NAME)
-    //                 {
-    //                     if (!currentNode)
-    //                     {
-    //                         currentNode = std::make_shared<JsonNode>(JsonListNode{});
-    //                     }
-    //                     std::get<JsonListNode>(*currentNode).push_back(keyNameAcc);
-
-    //                     charAcc.clear();
-    //                     keyNameAcc.clear();
-    //                     JSON_CHANGE_STATE(State::AQUIRED_CLOSING_TOKEN);
-
-    //                     println("RETURNING LIST");
-    //                     return {currentNode, ""};
-    //                 }
-    //                 else if (state == State::GET_KEY_LIST_VALUE)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::AQUIRED_KEY_VALUE);
-    //                 }
-    //                 else if (state == State::GET_KEY_NAME)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::ERROR);
-    //                     printlne("Missing closing \" while aquiring string value for key list");
-    //                 }
-    //                 else if (state == State::GET_KEY_MAP_VALUE)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::AQUIRED_CLOSING_TOKEN);
-    //                     println("RETURNING LIST 2");
-    //                     return {currentNode, ""};
-    //                 }
-    //                 break;
-
-    //             case '"': {
-    //                 /* Valid { needs to be continued by ", ignore spaces and new lines. */
-    //                 if (state == State::AQUIRED_OPENING_CURLY_TOKEN || state == State::AQUIRED_OPENING_SQUARE_TOKEN)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::GET_KEY_NAME);
-    //                 }
-    //                 /* After we accumulated the pair's key value, be sure there's a " to close the key.*/
-    //                 else if (state == State::GET_KEY_NAME)
-    //                 {
-    //                     if (keyNameAcc.empty())
-    //                     {
-    //                         JSON_CHANGE_STATE(State::ERROR);
-    //                         printlne("No name gathered. Missplaced start \" perhaps or really no name.");
-    //                     }
-    //                     else
-    //                     {
-    //                         JSON_CHANGE_STATE(State::AQUIRED_KEY_NAME);
-    //                         aquiredOpeningTokenDueToComma = false;
-    //                         printlne("name is: %s", keyNameAcc.c_str());
-
-    //                         // node->value[keyNameAcc] = FieldValue{};
-    //                     }
-    //                 }
-    //                 /* If we gather " before any opening token, we have a problem.*/
-    //                 else if (state == State::GET_OPENING_TOKEN)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::ERROR);
-    //                     printlne("Sub-object must start with { or [ , not %c", ch);
-    //                 }
-    //                 /* On this state, hitting " means we need to gather value of key which is a string */
-    //                 else if (state == State::GET_KEY_VALUE)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::GET_KEY_STRING_VALUE);
-    //                 }
-    //                 /* Hitting " on this state means we gathered the key's value string. */
-    //                 else if (state == State::GET_KEY_STRING_VALUE)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::AQUIRED_KEY_VALUE);
-    //                     printlne("value is: %s", charAcc.c_str());
-
-    //                     if (!currentNode)
-    //                     {
-    //                         currentNode = std::make_shared<JsonNode>(JsonObjectNode{});
-    //                     }
-    //                     std::get<JsonObjectNode>(*currentNode)[keyNameAcc] = charAcc;
-
-    //                     charAcc.clear();
-    //                     keyNameAcc.clear();
-    //                 }
-    //                 /* Hitting " on this state the : separator is missing */
-    //                 else if (state == State::AQUIRED_KEY_NAME)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::ERROR);
-    //                     printlne("Missing : between key and value");
-    //                 }
-    //                 /* Hitting " on this state the we forgot comma between pairs */
-    //                 else if (state == State::AQUIRED_KEY_VALUE)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::ERROR);
-    //                     printlne("Missing , between KV pairs");
-    //                 }
-    //                 break;
-    //             }
-    //             case ':': {
-    //                 /* If we gather : while getting key's name, mean there's " missing after name end. */
-    //                 if (state == State::GET_KEY_NAME)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::ERROR);
-    //                     printlne("Missing end \" for name: %s .", charAcc.c_str());
-    //                 }
-    //                 /* If we aquired key name, switch to get it's value when encountering " */
-    //                 else if (state == State::AQUIRED_KEY_NAME)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::GET_KEY_VALUE);
-    //                 }
-    //                 /* If we gather : but there's nothing accumulated, means the key is empty, not good. */
-    //                 else if (charAcc.empty())
-    //                 {
-    //                     JSON_CHANGE_STATE(State::ERROR);
-    //                     printlne("No name gathered. Missplaced \" perhaps or really no name.");
-    //                 }
-    //                 break;
-    //             }
-    //             case ',': {
-    //                 /* Getting to a , at this point means the object has more comma separated entries to be
-    //                 processed.
-    //                  * Switch to the point in time where we aquired the opening token.*/
-    //                 if (state == State::AQUIRED_KEY_VALUE)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::AQUIRED_OPENING_CURLY_TOKEN);
-    //                     aquiredOpeningTokenDueToComma = true;
-    //                     break;
-    //                 }
-    //                 else if (state == State::AQUIRED_KEY_NAME)
-    //                 {
-    //                     /* If its the curly bracket opener, then we have a problem. */
-    //                     if (isCurly)
-    //                     {
-    //                         printlne("Unexpected , after key name");
-    //                         JSON_CHANGE_STATE(State::ERROR);
-    //                     }
-    //                     /* Otherwise it's just comma between list elements */
-    //                     else
-    //                     {
-    //                         if (!currentNode)
-    //                         {
-    //                             currentNode = std::make_shared<JsonNode>(JsonListNode{});
-    //                         }
-    //                         std::get<JsonListNode>(*currentNode).push_back(keyNameAcc);
-    //                         keyNameAcc.clear();
-    //                         charAcc.clear();
-    //                         JSON_CHANGE_STATE(State::AQUIRED_OPENING_SQUARE_TOKEN);
-    //                     }
-    //                     break;
-    //                 }
-    //                 // else if (state == State::GET_KEY_MAP_VALUE)
-    //                 // {
-    //                 //     printlne("Unexpected , after key name list");
-    //                 //     JSON_CHANGE_STATE(State::ERROR);
-    //                 //     break;
-    //                 // }
-
-    //                 /* Justified fall. Collect comma into accumulator. */
-    //                 [[fallthrough]];
-    //             }
-    //             default:
-    //                 /* If we aquired opening token but we don't hit " as next char, we have a problem. */
-    //                 if (state == State::AQUIRED_OPENING_CURLY_TOKEN || state == State::AQUIRED_OPENING_SQUARE_TOKEN)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::ERROR);
-    //                     printlne("Missing start \" before aquiring name");
-    //                 }
-    //                 /* If we are in the middle of getting the opening token but we encounter non-special char, we
-    //                 have a
-    //                  * problem. */
-    //                 else if (state == State::GET_OPENING_TOKEN)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::ERROR);
-    //                     printlne("Sub-object must start with { or [ , not %c", ch);
-    //                 }
-    //                 /* If we get here, means that after key's : we hit a non special char, but maybe "null" token
-    //                 comes
-    //                  * next. */
-    //                 else if (state == State::GET_KEY_VALUE)
-    //                 {
-    //                     /* Maybe "null" value is next*/
-    //                     bool isNullValue{false};
-    //                     if (ch == 'n')
-    //                     {
-    //                         int8_t readBackChars{0};
-    //                         if (utils::read1(stream) == 'u')
-    //                         {
-    //                             readBackChars++;
-    //                             if (utils::read1(stream) == 'l')
-    //                             {
-    //                                 readBackChars++;
-    //                                 if (utils::read1(stream) == 'l')
-    //                                 {
-    //                                     readBackChars++;
-    //                                     isNullValue = true;
-    //                                 }
-    //                             }
-    //                         }
-    //                     }
-
-    //                     if (isNullValue)
-    //                     {
-    //                         printlne("value is null");
-    //                         if (!currentNode)
-    //                         {
-    //                             currentNode = std::make_shared<JsonNode>(JsonObjectNode{});
-    //                         }
-    //                         std::get<JsonObjectNode>(*currentNode)[keyNameAcc] = charAcc;
-
-    //                         charAcc.clear();
-    //                         keyNameAcc.clear();
-
-    //                         JSON_CHANGE_STATE(State::AQUIRED_KEY_VALUE);
-    //                         break;
-    //                     }
-
-    //                     /* Otherwise error, if it was a string, it would of caught " and changed states. */
-    //                     JSON_CHANGE_STATE(State::ERROR);
-    //                     printlne("Key's value seems to be a string but start \" is missing");
-    //                 }
-    //                 /* Accumulate the key's value */
-    //                 else if (state == State::GET_KEY_NAME)
-    //                 {
-    //                     keyNameAcc += ch;
-    //                 }
-    //                 /* Accumulate the key's string value. */
-    //                 else if (state == State::GET_KEY_STRING_VALUE)
-    //                 {
-    //                     charAcc += ch;
-    //                 }
-    //                 /* There's a token other than , or } in this case, bad.*/
-    //                 else if (state == State::AQUIRED_KEY_VALUE)
-    //                 {
-    //                     JSON_CHANGE_STATE(State::ERROR);
-    //                     printlne("Unexpected character after aquring the key's value");
-    //                 }
-    //                 break;
-    //         }
-    //     }
-
-    //     /* Handle case in which stream suddenly ends with no closing } */
-    //     if (state != State::ERROR && state != State::AQUIRED_CLOSING_TOKEN)
-    //     {
-    //         printlne("Closing token } has not been found.");
-    //         JSON_CHANGE_STATE(State::ERROR);
-    //     }
-
-    //     /* We shall never get here if no errors */
-    //     return {nullptr, "very bad error"};
-    // }
 
     void printJson(const JsonNode& node)
     {
@@ -864,10 +737,6 @@ struct Json
         {
             printJsonList(std::get<JsonListNode>(node), 0);
         }
-        // else
-        // {
-        //     printf("what");
-        // }
     }
 
     void printJsonObject(const JsonObjectNode& objNode, uint32_t depth = 0)
@@ -881,7 +750,19 @@ struct Json
             {
                 printf("\"%s\":\"%s\"", k.c_str(), std::get<std::string>(v).c_str());
             }
-            if (std::holds_alternative<double>(v))
+            else if (std::holds_alternative<bool>(v))
+            {
+                printf("\"%s\":%s", k.c_str(), std::get<bool>(v) ? "true" : "false");
+            }
+            else if (std::holds_alternative<JsonNull>(v))
+            {
+                printf("\"%s\":null", k.c_str());
+            }
+            else if (std::holds_alternative<int64_t>(v))
+            {
+                printf("\"%s\":%ld", k.c_str(), std::get<int64_t>(v));
+            }
+            else if (std::holds_alternative<double>(v))
             {
                 printf("\"%s\":%lf", k.c_str(), std::get<double>(v));
             }
@@ -916,18 +797,28 @@ struct Json
             {
                 printf("\"%s\"", std::get<std::string>(v).c_str());
             }
+            if (std::holds_alternative<bool>(v))
+            {
+                printf("%s", std::get<bool>(v) ? "true" : "false");
+            }
+            else if (std::holds_alternative<JsonNull>(v))
+            {
+                printf("null");
+            }
+            else if (std::holds_alternative<int64_t>(v))
+            {
+                printf("%ld", std::get<int64_t>(v));
+            }
             if (std::holds_alternative<double>(v))
             {
                 printf("%lf", std::get<double>(v));
             }
             else if (std::holds_alternative<JsonObjectNode>(v))
             {
-                // printf("\"%s\":", k.c_str());
                 printJsonObject(std::get<JsonObjectNode>(v), depth + 1);
             }
             else if (std::holds_alternative<JsonListNode>(v))
             {
-                // printf("\"%s\":", k.c_str());
                 printJsonList(std::get<JsonListNode>(v), depth + 1);
             }
             i++;
@@ -958,20 +849,6 @@ struct Json
 
         switch (state)
         {
-            STATE_CASE(State::IDLE);
-            STATE_CASE(State::AQUIRED_OPENING_CURLY_TOKEN);
-            STATE_CASE(State::AQUIRED_OPENING_SQUARE_TOKEN);
-            STATE_CASE(State::GET_CLOSING_CURLY_TOKEN);
-            STATE_CASE(State::GET_CLOSING_SQUARE_TOKEN);
-            STATE_CASE(State::AQUIRED_CLOSING_TOKEN);
-            STATE_CASE(State::GET_KEY_NAME);
-            STATE_CASE(State::AQUIRED_KEY_NAME);
-            STATE_CASE(State::GET_KEY_VALUE);
-            STATE_CASE(State::AQUIRED_KEY_VALUE);
-            STATE_CASE(State::GET_KEY_STRING_VALUE);
-            STATE_CASE(State::GET_KEY_MAP_VALUE);
-            STATE_CASE(State::GET_KEY_LIST_VALUE);
-
             STATE_CASE(State::ERROR);
             STATE_CASE(State::GET_OPENING_TOKEN);
             STATE_CASE(State::GOT_CURLY_OPENING_TOKEN);
@@ -998,11 +875,14 @@ struct Json
             STATE_CASE(State::GOT_BRAKET_BRAKET_CLOSING_TOKEN);
             STATE_CASE(State::GOT_NUMBER_KEY_VALUE_OPENING);
             STATE_CASE(State::GETTING_NUMBER_KEY_VALUE_CHARS);
+            STATE_CASE(State::GOT_NULL_TOKEN);
+            STATE_CASE(State::GOT_TRUE_TOKEN);
+            STATE_CASE(State::GOT_FALSE_TOKEN);
         }
 #undef STATE_CASE
         return "<state unknown>";
     }
-};
+}; // namespace hk
 
 } // namespace hk
 int main(int argc, char** argv)

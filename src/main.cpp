@@ -15,181 +15,128 @@ struct Json
 {
 #define JSON_CHANGE_STATE(x) changeState(state, x, __LINE__);
 
-#define JSON_GET_MAP_FIELD_VALUE(returnType, funcName)                                                                 \
-    returnType funcName(const std::string& key) const                                                                  \
+#define IS_TYPE(type, name)                                                                                            \
+    bool name() const                                                                                                  \
     {                                                                                                                  \
-        FieldValue fv;                                                                                                 \
-        returnType retVal;                                                                                             \
-        try                                                                                                            \
-        {                                                                                                              \
-            fv = at(key);                                                                                              \
-        }                                                                                                              \
-        catch (const std::exception& e)                                                                                \
-        {                                                                                                              \
-            std::string errBuff;                                                                                       \
-            sprint(errBuff, #funcName "{%s} value not in object", key.c_str());                                        \
-            throw std::runtime_error(errBuff);                                                                         \
-        }                                                                                                              \
-        try                                                                                                            \
-        {                                                                                                              \
-            retVal = std::get<returnType>(fv);                                                                         \
-        }                                                                                                              \
-        catch (const std::exception& e)                                                                                \
-        {                                                                                                              \
-            std::string errBuff;                                                                                       \
-            sprint(errBuff, #funcName "{%s} value not " #returnType, key.c_str());                                     \
-            throw std::runtime_error(errBuff);                                                                         \
-        }                                                                                                              \
-        return retVal;                                                                                                 \
+        return std::holds_alternative<type>(var);                                                                      \
     }
 
-#define JSON_GET_LIST_FIELD_VALUE(returnType, funcName)                                                                \
-    returnType funcName(const int64_t index) const                                                                     \
+#define _GET_TYPE_REF(type, name, constToken)                                                                          \
+    constToken type& name() constToken                                                                                 \
     {                                                                                                                  \
-        FieldValue fv;                                                                                                 \
-        returnType retVal;                                                                                             \
-        try                                                                                                            \
-        {                                                                                                              \
-            fv = at(index);                                                                                            \
-        }                                                                                                              \
-        catch (const std::exception& e)                                                                                \
-        {                                                                                                              \
-            std::string errBuff;                                                                                       \
-            sprint(errBuff, #funcName "[%ld] value not in list", index);                                               \
-            throw std::runtime_error(errBuff);                                                                         \
-        }                                                                                                              \
-        try                                                                                                            \
-        {                                                                                                              \
-            retVal = std::get<returnType>(fv);                                                                         \
-        }                                                                                                              \
-        catch (const std::exception& e)                                                                                \
-        {                                                                                                              \
-            std::string errBuff;                                                                                       \
-            sprint(errBuff, #funcName "[%ld] value not " #returnType, index);                                          \
-            throw std::runtime_error(errBuff);                                                                         \
-        }                                                                                                              \
-        return retVal;                                                                                                 \
-    }
-
-#define JSON_IS_MAP_FIELD_OF_TYPE(type, funcName)                                                                      \
-    bool funcName(const std::string& key) const                                                                        \
-    {                                                                                                                  \
-        FieldValue fv;                                                                                                 \
-        try                                                                                                            \
-        {                                                                                                              \
-            fv = at(key);                                                                                              \
-        }                                                                                                              \
-        catch (const std::exception& e)                                                                                \
-        {                                                                                                              \
-            return false;                                                                                              \
-        }                                                                                                              \
-        try                                                                                                            \
-        {                                                                                                              \
-            std::get<type>(fv);                                                                                        \
-        }                                                                                                              \
-        catch (const std::exception& e)                                                                                \
-        {                                                                                                              \
-            return false;                                                                                              \
-        }                                                                                                              \
-        return true;                                                                                                   \
-    }
-
-#define JSON_IS_LIST_FIELD_OF_TYPE(type, funcName)                                                                     \
-    bool funcName(const int64_t index) const                                                                           \
-    {                                                                                                                  \
-        FieldValue fv;                                                                                                 \
-        try                                                                                                            \
-        {                                                                                                              \
-            fv = at(index);                                                                                            \
-        }                                                                                                              \
-        catch (const std::exception& e)                                                                                \
-        {                                                                                                              \
-            return false;                                                                                              \
-        }                                                                                                              \
-        try                                                                                                            \
-        {                                                                                                              \
-            std::get<type>(fv);                                                                                        \
-        }                                                                                                              \
-        catch (const std::exception& e)                                                                                \
-        {                                                                                                              \
-            return false;                                                                                              \
-        }                                                                                                              \
-        return true;                                                                                                   \
+        return std::get<type>(var);                                                                                    \
     }
 
     struct JsonObjectNode;
     struct JsonListNode;
-
     struct JsonNull
     {};
 
-    using JsonObjectNodeSPtr = std::shared_ptr<JsonObjectNode>;
-    using JsonListNodeSPtr = std::shared_ptr<JsonListNode>;
+#define GET_TYPE_CONST_REF(type, name) _GET_TYPE_REF(type, name, const)
+#define GET_TYPE_REF(type, name) _GET_TYPE_REF(type, name, )
 
-    using FieldValue = std::variant<bool, double, int64_t, std::string, JsonObjectNode, JsonListNode, JsonNull>;
+    using FieldValueVariant = std::variant<bool, double, int64_t, std::string, JsonObjectNode, JsonListNode, JsonNull>;
 
-    struct JsonObjectNode : public std::unordered_map<std::string, FieldValue>
+    template <typename T> struct _InternalFieldValue
     {
-        JSON_GET_MAP_FIELD_VALUE(bool, getBool);
-        JSON_GET_MAP_FIELD_VALUE(double, getDouble);
-        JSON_GET_MAP_FIELD_VALUE(int64_t, getInt);
-        JSON_GET_MAP_FIELD_VALUE(std::string, getString);
-        JSON_GET_MAP_FIELD_VALUE(JsonObjectNode, getObject);
-        JSON_GET_MAP_FIELD_VALUE(JsonListNode, getList);
+        _InternalFieldValue()
+            : var{}
+        {}
 
-        JSON_IS_MAP_FIELD_OF_TYPE(bool, isBool);
-        JSON_IS_MAP_FIELD_OF_TYPE(double, isDouble);
-        JSON_IS_MAP_FIELD_OF_TYPE(int64_t, isInt);
-        JSON_IS_MAP_FIELD_OF_TYPE(std::string, isString);
-        JSON_IS_MAP_FIELD_OF_TYPE(JsonObjectNode, isObject);
-        JSON_IS_MAP_FIELD_OF_TYPE(JsonListNode, isList);
-        JSON_IS_MAP_FIELD_OF_TYPE(JsonNull, isNull);
-    };
+        template <typename VariantType>
+        _InternalFieldValue(VariantType&& val)
+            : var{std::forward<VariantType>(val)}
+        {}
 
-    struct JsonListNode : public std::vector<FieldValue>
-    {
-        JSON_GET_LIST_FIELD_VALUE(bool, getBool);
-        JSON_GET_LIST_FIELD_VALUE(double, getDouble);
-        JSON_GET_LIST_FIELD_VALUE(int64_t, getInt);
-        JSON_GET_LIST_FIELD_VALUE(std::string, getString);
-        JSON_GET_LIST_FIELD_VALUE(JsonObjectNode, getObject);
-        JSON_GET_LIST_FIELD_VALUE(JsonListNode, getList);
-
-        JSON_IS_LIST_FIELD_OF_TYPE(bool, isBool);
-        JSON_IS_LIST_FIELD_OF_TYPE(double, isDouble);
-        JSON_IS_LIST_FIELD_OF_TYPE(int64_t, isInt);
-        JSON_IS_LIST_FIELD_OF_TYPE(std::string, isString);
-        JSON_IS_LIST_FIELD_OF_TYPE(JsonObjectNode, isObject);
-        JSON_IS_LIST_FIELD_OF_TYPE(JsonListNode, isList);
-        JSON_IS_LIST_FIELD_OF_TYPE(JsonNull, isNull);
-    };
-
-    struct JsonNode : public std::variant<JsonObjectNode, JsonListNode>
-    {
-
-        JsonListNode operator[](const uint64_t)
+        template <typename VariantType> _InternalFieldValue& operator=(VariantType&& rhs)
         {
-            if (!std::holds_alternative<JsonListNode>(*this))
-            {
-                return JsonListNode{};
-            }
-
-            return std::get<JsonListNode>(*this);
+            var = std::move(rhs);
+            return *this;
         }
 
-        JsonObjectNode operator[](const std::string)
+        IS_TYPE(bool, isBool);
+        IS_TYPE(int64_t, isInt);
+        IS_TYPE(double, isDouble);
+        IS_TYPE(std::string, isString);
+        IS_TYPE(JsonNull, isNull);
+        IS_TYPE(JsonObjectNode, isObject);
+        IS_TYPE(JsonListNode, isList);
+
+        GET_TYPE_REF(bool, getBool);
+        GET_TYPE_REF(int64_t, getInt);
+        GET_TYPE_REF(double, getDouble);
+        GET_TYPE_REF(std::string, getString);
+        GET_TYPE_REF(JsonObjectNode, getObject);
+        GET_TYPE_REF(JsonListNode, getList);
+
+        GET_TYPE_CONST_REF(bool, getBool);
+        GET_TYPE_CONST_REF(int64_t, getInt);
+        GET_TYPE_CONST_REF(double, getDouble);
+        GET_TYPE_CONST_REF(std::string, getString);
+        GET_TYPE_CONST_REF(JsonObjectNode, getObject);
+        GET_TYPE_CONST_REF(JsonListNode, getList);
+
+        _InternalFieldValue<FieldValueVariant>& operator[](const std::string& key)
+        {
+            return std::get<JsonObjectNode>(var).at(key);
+        }
+
+        _InternalFieldValue<FieldValueVariant>& operator[](const uint64_t key)
+        {
+            return std::get<JsonListNode>(var).at(key);
+        }
+
+        const _InternalFieldValue<FieldValueVariant>& operator[](const std::string& key) const
+        {
+            return std::get<JsonObjectNode>(var).at(key);
+        }
+
+        const _InternalFieldValue<FieldValueVariant>& operator[](const uint64_t key) const
+        {
+            return std::get<JsonListNode>(var).at(key);
+        }
+
+        T var;
+    };
+
+    using JsonFieldValue = _InternalFieldValue<FieldValueVariant>;
+
+    struct JsonObjectNode : public std::unordered_map<std::string, JsonFieldValue>
+    {};
+
+    struct JsonListNode : public std::vector<JsonFieldValue>
+    {};
+
+    struct JsonRootNode : public std::variant<JsonObjectNode, JsonListNode>
+    {
+        JsonFieldValue& operator[](const std::string& key)
+        {
+            return std::get<JsonObjectNode>(*this).at(key);
+        }
+
+        JsonObjectNode& rootObject()
         {
             if (!std::holds_alternative<JsonObjectNode>(*this))
             {
-                return JsonObjectNode{};
+                throw std::runtime_error("operator[] container not an object");
             }
 
             return std::get<JsonObjectNode>(*this);
         }
+
+        JsonListNode& rootList()
+        {
+            if (!std::holds_alternative<JsonListNode>(*this))
+            {
+                throw std::runtime_error("operator[] container not a list");
+            }
+
+            return std::get<JsonListNode>(*this);
+        }
     };
 
-    using JsonNodeSPtr = std::shared_ptr<JsonNode>;
-    using JsonNodeWPtr = std::weak_ptr<JsonNode>;
+    using JsonNodeSPtr = std::shared_ptr<JsonRootNode>;
+    using JsonNodeWPtr = std::weak_ptr<JsonRootNode>;
 
     enum class State
     {
@@ -264,15 +211,15 @@ struct Json
             printJson(*result.json);
             printf("\n");
 
-            JsonNode n = (*result.json);
+            JsonRootNode& obj = *result.json;
 
             try
             {
-                auto fv = n[""].getObject("company").getList("departments").getObject(0).getString("name");
-                // auto fv = n[""].getObject("company").getString("name");
-                // auto fv = n[0].getInt(0);
-
-                printlne("%s", fv.c_str());
+                std::string& myStr = obj["company"]["departments"][0]["name"].getString();
+                const JsonObjectNode& oNode = obj["company"].getObject();
+                // for (const auto& [k, v] : oNode) {
+                printJsonObject(oNode);
+                // }
             }
             catch (const std::exception& e)
             {
@@ -325,7 +272,7 @@ struct Json
                     if (state == State::GET_OPENING_TOKEN)
                     {
                         JSON_CHANGE_STATE(State::GOT_CURLY_OPENING_TOKEN);
-                        currentNode = std::make_shared<JsonNode>(JsonObjectNode{});
+                        currentNode = std::make_shared<JsonRootNode>(JsonObjectNode{});
                         holdsObject = true;
                     }
                     else if (state == State::GOT_DOUBLE_DOT_SEPATATOR)
@@ -339,8 +286,8 @@ struct Json
                             return {nullptr, out.error};
                         }
 
-                        // TODO: we shall use pointers more to avoid copying/deref
-                        std::get<JsonObjectNode>(*currentNode)[primaryAcc] = std::get<JsonObjectNode>(*out.json);
+                        std::get<JsonObjectNode>(*currentNode)[primaryAcc] =
+                            std::move(std::get<JsonObjectNode>(*out.json));
                         primaryAcc.clear();
 
                         JSON_CHANGE_STATE(State::GOT_MAP_KEY_VALUE_CLOSING_CURLY);
@@ -356,7 +303,8 @@ struct Json
                             return {nullptr, out.error};
                         }
 
-                        std::get<JsonListNode>(*currentNode).push_back(std::get<JsonObjectNode>(*out.json));
+                        std::get<JsonListNode>(*currentNode)
+                            .emplace_back(std::move(std::get<JsonObjectNode>(*out.json)));
                         JSON_CHANGE_STATE(State::GOT_BRAKET_CURLY_CLOSING_TOKEN);
                     }
                     break;
@@ -365,7 +313,7 @@ struct Json
                     if (state == State::GET_OPENING_TOKEN)
                     {
                         JSON_CHANGE_STATE(State::GOT_BRAKET_OPENING_TOKEN);
-                        currentNode = std::make_shared<JsonNode>(JsonListNode{});
+                        currentNode = std::make_shared<JsonRootNode>(JsonListNode{});
                         holdsObject = false;
                     }
                     else if (state == State::GOT_DOUBLE_DOT_SEPATATOR)
@@ -379,8 +327,8 @@ struct Json
                             return {nullptr, out.error};
                         }
 
-                        // TODO: we shall use pointers more to avoid copying/deref
-                        std::get<JsonObjectNode>(*currentNode)[primaryAcc] = std::get<JsonListNode>(*out.json);
+                        std::get<JsonObjectNode>(*currentNode)[primaryAcc] =
+                            std::move(std::get<JsonListNode>(*out.json));
                         primaryAcc.clear();
 
                         JSON_CHANGE_STATE(State::GOT_LIST_KEY_VALUE_CLOSING_BRAKET);
@@ -396,7 +344,7 @@ struct Json
                             return {nullptr, out.error};
                         }
 
-                        std::get<JsonListNode>(*currentNode).emplace_back(std::get<JsonListNode>(*out.json));
+                        std::get<JsonListNode>(*currentNode).emplace_back(std::move(std::get<JsonListNode>(*out.json)));
 
                         JSON_CHANGE_STATE(State::GOT_BRAKET_BRAKET_CLOSING_TOKEN);
                     }
@@ -411,7 +359,7 @@ struct Json
                     {
                         if (state == State::GETTING_NUMBER_KEY_VALUE_CHARS)
                         {
-                            printlne("number: %s", secondaryAcc.c_str());
+                            // printlne("number: %s", secondaryAcc.c_str());
                             if (secondaryAcc.contains('.'))
                             {
                                 double theNumber = std::stod(secondaryAcc);
@@ -429,7 +377,7 @@ struct Json
                         JSON_CHANGE_STATE(State::GOT_CURLY_CLOSING_TOKEN);
                         if (returnEarly)
                         {
-                            printlne("return early");
+                            // printlne("return early");
                             return {currentNode, ""};
                         }
                     }
@@ -444,17 +392,17 @@ struct Json
                     {
                         if (state == State::GETTING_NUMBER_KEY_VALUE_CHARS)
                         {
-                            printlne("number: %s", secondaryAcc.c_str());
+                            // printlne("number: %s", secondaryAcc.c_str());
 
                             if (secondaryAcc.contains('.'))
                             {
                                 double theNumber = std::stod(secondaryAcc);
-                                std::get<JsonListNode>(*currentNode).push_back(theNumber);
+                                std::get<JsonListNode>(*currentNode).push_back(JsonFieldValue{theNumber});
                             }
                             else
                             {
                                 int64_t theNumber = std::stoi(secondaryAcc);
-                                std::get<JsonListNode>(*currentNode).push_back(theNumber);
+                                std::get<JsonListNode>(*currentNode).push_back(JsonFieldValue{theNumber});
                             }
                             primaryAcc.clear();
                             secondaryAcc.clear();
@@ -463,7 +411,7 @@ struct Json
                         JSON_CHANGE_STATE(State::GOT_BRAKET_CLOSING_TOKEN);
                         if (returnEarly)
                         {
-                            printlne("return early list ");
+                            // printlne("return early list ");
                             return {currentNode, ""};
                         }
                     }
@@ -477,7 +425,7 @@ struct Json
                     else if (state == State::GETTING_KEY_NAME_CHARS)
                     {
                         JSON_CHANGE_STATE(State::GOT_KEY_NAME_CLOSING_QUOTE);
-                        printlne("map key name is: %s", primaryAcc.c_str());
+                        // printlne("map key name is: %s", primaryAcc.c_str());
                     }
                     else if (state == State::GOT_DOUBLE_DOT_SEPATATOR)
                     {
@@ -486,7 +434,7 @@ struct Json
                     else if (state == State::GETTING_STRING_KEY_VALUE_CHARS)
                     {
                         JSON_CHANGE_STATE(State::GOT_STRING_KEY_VALUE_CLOSING_QUOTE);
-                        printlne("map key value is: %s", secondaryAcc.c_str());
+                        // printlne("map key value is: %s", secondaryAcc.c_str());
 
                         std::get<JsonObjectNode>(*currentNode)[primaryAcc] = secondaryAcc;
                         primaryAcc.clear();
@@ -499,7 +447,7 @@ struct Json
                     else if (state == State::GETTING_BRAKET_STRING_CHARS)
                     {
                         JSON_CHANGE_STATE(State::GOT_BRAKET_STRING_CLOSING_QUOTE);
-                        printlne("list value is: %s", primaryAcc.c_str());
+                        // printlne("list value is: %s", primaryAcc.c_str());
 
                         std::get<JsonListNode>(*currentNode).push_back(primaryAcc);
                         primaryAcc.clear();
@@ -523,7 +471,7 @@ struct Json
                     {
                         if (state == State::GETTING_NUMBER_KEY_VALUE_CHARS)
                         {
-                            printlne("number: %s", secondaryAcc.c_str());
+                            // printlne("number: %s", secondaryAcc.c_str());
                             if (secondaryAcc.contains('.'))
                             {
                                 double theNumber = std::stod(secondaryAcc);
@@ -550,7 +498,7 @@ struct Json
                     {
                         if (state == State::GETTING_NUMBER_KEY_VALUE_CHARS)
                         {
-                            printlne("number: %s", secondaryAcc.c_str());
+                            // printlne("number: %s", secondaryAcc.c_str());
                             if (secondaryAcc.contains('.'))
                             {
                                 double theNumber = std::stod(secondaryAcc);
@@ -727,7 +675,7 @@ struct Json
         return {currentNode, ""};
     }
 
-    void printJson(const JsonNode& node)
+    void printJson(const JsonRootNode& node)
     {
         if (std::holds_alternative<JsonObjectNode>(node))
         {
@@ -744,37 +692,37 @@ struct Json
         printf("{");
         const auto& kvMap = objNode;
         const uint64_t mapSize = kvMap.size();
-        for (uint32_t i{0}; const auto& [k, v] : kvMap)
+        for (uint32_t i{0}; auto& [k, v] : kvMap)
         {
-            if (std::holds_alternative<std::string>(v))
+            if (v.isString())
             {
-                printf("\"%s\":\"%s\"", k.c_str(), std::get<std::string>(v).c_str());
+                printf("\"%s\":\"%s\"", k.c_str(), v.getString().c_str());
             }
-            else if (std::holds_alternative<bool>(v))
+            else if (v.isBool())
             {
-                printf("\"%s\":%s", k.c_str(), std::get<bool>(v) ? "true" : "false");
+                printf("\"%s\":%s", k.c_str(), v.getBool() ? "true" : "false");
             }
-            else if (std::holds_alternative<JsonNull>(v))
+            else if (v.isNull())
             {
                 printf("\"%s\":null", k.c_str());
             }
-            else if (std::holds_alternative<int64_t>(v))
+            else if (v.isInt())
             {
-                printf("\"%s\":%ld", k.c_str(), std::get<int64_t>(v));
+                printf("\"%s\":%ld", k.c_str(), v.getInt());
             }
-            else if (std::holds_alternative<double>(v))
+            else if (v.isDouble())
             {
-                printf("\"%s\":%lf", k.c_str(), std::get<double>(v));
+                printf("\"%s\":%lf", k.c_str(), v.getDouble());
             }
-            else if (std::holds_alternative<JsonObjectNode>(v))
+            else if (v.isObject())
             {
                 printf("\"%s\":", k.c_str());
-                printJsonObject(std::get<JsonObjectNode>(v), depth + 1);
+                printJsonObject(v.getObject(), depth + 1);
             }
-            else if (std::holds_alternative<JsonListNode>(v))
+            else if (v.isList())
             {
                 printf("\"%s\":", k.c_str());
-                printJsonList(std::get<JsonListNode>(v), depth + 1);
+                printJsonList(v.getList(), depth + 1);
             }
 
             i++;
@@ -793,33 +741,33 @@ struct Json
         const uint64_t mapSize = theList.size();
         for (uint32_t i{0}; const auto& v : theList)
         {
-            if (std::holds_alternative<std::string>(v))
+            if (v.isString())
             {
-                printf("\"%s\"", std::get<std::string>(v).c_str());
+                printf("\"%s\"", v.getString().c_str());
             }
-            if (std::holds_alternative<bool>(v))
+            else if (v.isBool())
             {
-                printf("%s", std::get<bool>(v) ? "true" : "false");
+                printf("%s", v.getBool() ? "true" : "false");
             }
-            else if (std::holds_alternative<JsonNull>(v))
+            else if (v.isNull())
             {
                 printf("null");
             }
-            else if (std::holds_alternative<int64_t>(v))
+            else if (v.isInt())
             {
-                printf("%ld", std::get<int64_t>(v));
+                printf("%ld", v.getInt());
             }
-            if (std::holds_alternative<double>(v))
+            else if (v.isDouble())
             {
-                printf("%lf", std::get<double>(v));
+                printf("%lf", v.getDouble());
             }
-            else if (std::holds_alternative<JsonObjectNode>(v))
+            else if (v.isObject())
             {
-                printJsonObject(std::get<JsonObjectNode>(v), depth + 1);
+                printJsonObject(v.getObject(), depth + 1);
             }
-            else if (std::holds_alternative<JsonListNode>(v))
+            else if (v.isList())
             {
-                printJsonList(std::get<JsonListNode>(v), depth + 1);
+                printJsonList(v.getList(), depth + 1);
             }
             i++;
             if (i != mapSize)
@@ -834,10 +782,11 @@ struct Json
     {
         if (state == newState)
         {
-            println("[%d] State is already %s", line, getStateString(newState).c_str());
+            // println("[%d] State is already %s", line, getStateString(newState).c_str());
             return;
         }
-        println("[%d] Switching from %s to %s", line, getStateString(state).c_str(), getStateString(newState).c_str());
+        // println("[%d] Switching from %s to %s", line, getStateString(state).c_str(),
+        // getStateString(newState).c_str());
         state = newState;
     }
 

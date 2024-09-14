@@ -18,13 +18,13 @@ struct Json
 #define IS_TYPE(type, name)                                                                                            \
     bool name() const                                                                                                  \
     {                                                                                                                  \
-        return std::holds_alternative<type>(var);                                                                      \
+        return std::holds_alternative<type>(internalVariant);                                                          \
     }
 
 #define _GET_TYPE_REF(type, name, constToken)                                                                          \
     constToken type& name() constToken                                                                                 \
     {                                                                                                                  \
-        return std::get<type>(var);                                                                                    \
+        return std::get<type>(internalVariant);                                                                        \
     }
 
     struct JsonObjectNode;
@@ -35,24 +35,62 @@ struct Json
 #define GET_TYPE_CONST_REF(type, name) _GET_TYPE_REF(type, name, const)
 #define GET_TYPE_REF(type, name) _GET_TYPE_REF(type, name, )
 
+#define _INIT_IMPLICIT_CTOR(type, constToken)                                                                          \
+    _InternalFieldValue(constToken type val)                                                                           \
+        : internalVariant{val}                                                                                         \
+    {}
+
+#define INIT_IMPLICIT_CTOR(type) _INIT_IMPLICIT_CTOR(type, )
+#define INIT_IMPLICIT_CTOR_CONST_REF(type) _INIT_IMPLICIT_CTOR(type, const)
+
+#define INIT_COPY_ASSIGN(type)                                                                                         \
+    _InternalFieldValue& operator=(const type& rhs)                                                                    \
+    {                                                                                                                  \
+        internalVariant = std::forward<FieldValueVariant>(rhs);                                                        \
+        return *this;                                                                                                  \
+    }
+#define INIT_MOVE_ASSIGN(type)                                                                                         \
+    _InternalFieldValue& operator=(type&& rhs)                                                                         \
+    {                                                                                                                  \
+        internalVariant = std::forward<FieldValueVariant>(rhs);                                                        \
+        return *this;                                                                                                  \
+    }
+
     using FieldValueVariant = std::variant<bool, double, int64_t, std::string, JsonObjectNode, JsonListNode, JsonNull>;
 
     template <typename T> struct _InternalFieldValue
     {
+
         _InternalFieldValue()
-            : var{}
+            : internalVariant{}
         {}
 
-        template <typename VariantType>
-        _InternalFieldValue(VariantType&& val)
-            : var{std::forward<VariantType>(val)}
+        // implicit copy ctors
+        INIT_IMPLICIT_CTOR(bool);
+        INIT_IMPLICIT_CTOR(double);
+        INIT_IMPLICIT_CTOR(int32_t);
+        INIT_IMPLICIT_CTOR(int64_t);
+        INIT_IMPLICIT_CTOR(JsonNull);
+        INIT_IMPLICIT_CTOR_CONST_REF(std::string);
+        INIT_IMPLICIT_CTOR_CONST_REF(JsonObjectNode);
+        INIT_IMPLICIT_CTOR_CONST_REF(JsonListNode);
+
+        // copy assignment
+        INIT_COPY_ASSIGN(JsonNull);
+        INIT_COPY_ASSIGN(std::string);
+        INIT_COPY_ASSIGN(JsonObjectNode);
+        INIT_COPY_ASSIGN(JsonListNode);
+
+        // move ctors
+        _InternalFieldValue(FieldValueVariant&& val)
+            : internalVariant{std::forward<FieldValueVariant>(val)}
         {}
 
-        template <typename VariantType> _InternalFieldValue& operator=(VariantType&& rhs)
-        {
-            var = std::move(rhs);
-            return *this;
-        }
+        // move assignment
+        INIT_MOVE_ASSIGN(std::string);
+        INIT_MOVE_ASSIGN(JsonListNode);
+        INIT_MOVE_ASSIGN(JsonObjectNode);
+        INIT_MOVE_ASSIGN(JsonNull);
 
         IS_TYPE(bool, isBool);
         IS_TYPE(int64_t, isInt);
@@ -76,62 +114,70 @@ struct Json
         GET_TYPE_CONST_REF(JsonObjectNode, getObject);
         GET_TYPE_CONST_REF(JsonListNode, getList);
 
+#undef IS_TYPE
+#undef _GET_TYPE_REF
+#undef GET_TYPE_CONST_REF
+#undef GET_TYPE_REF
+#undef _INIT_IMPLICIT_CTOR
+#undef INIT_IMPLICIT_CTOR
+#undef INIT_IMPLICIT_CTOR_CONST_REF
+#undef INIT_COPY_ASSIGN
+#undef INIT_MOVE_ASSIGN
+
         _InternalFieldValue<FieldValueVariant>& operator[](const std::string& key)
         {
-            return std::get<JsonObjectNode>(var).at(key);
+            return std::get<JsonObjectNode>(internalVariant)[key];
         }
 
         _InternalFieldValue<FieldValueVariant>& operator[](const uint64_t key)
         {
-            return std::get<JsonListNode>(var).at(key);
+            return std::get<JsonListNode>(internalVariant)[key];
         }
 
         const _InternalFieldValue<FieldValueVariant>& operator[](const std::string& key) const
         {
-            return std::get<JsonObjectNode>(var).at(key);
+            return std::get<JsonObjectNode>(internalVariant)[key];
         }
 
         const _InternalFieldValue<FieldValueVariant>& operator[](const uint64_t key) const
         {
-            return std::get<JsonListNode>(var).at(key);
+            return std::get<JsonListNode>(internalVariant)[key];
         }
 
-        T var;
+        /* Some types of FieldValueVariant are needed but are incomplete at this point so T generic is used. */
+        T internalVariant;
     };
 
     using JsonFieldValue = _InternalFieldValue<FieldValueVariant>;
 
     struct JsonObjectNode : public std::unordered_map<std::string, JsonFieldValue>
-    {};
+    {
+        JsonObjectNode() = default;
+
+        JsonObjectNode(std::initializer_list<std::pair<const std::string, JsonFieldValue>> init)
+            : std::unordered_map<std::string, JsonFieldValue>(init)
+        {}
+    };
 
     struct JsonListNode : public std::vector<JsonFieldValue>
-    {};
+    {
+        JsonListNode() = default;
+
+        JsonListNode(std::initializer_list<JsonFieldValue> initList)
+            : std::vector<JsonFieldValue>(initList)
+        {}
+    };
 
     struct JsonRootNode : public std::variant<JsonObjectNode, JsonListNode>
     {
         JsonFieldValue& operator[](const std::string& key)
         {
-            return std::get<JsonObjectNode>(*this).at(key);
+            return std::get<JsonObjectNode>(*this)[key];
         }
 
-        JsonObjectNode& rootObject()
+        JsonFieldValue& operator[](const uint64_t key)
         {
-            if (!std::holds_alternative<JsonObjectNode>(*this))
-            {
-                throw std::runtime_error("operator[] container not an object");
-            }
-
-            return std::get<JsonObjectNode>(*this);
-        }
-
-        JsonListNode& rootList()
-        {
-            if (!std::holds_alternative<JsonListNode>(*this))
-            {
-                throw std::runtime_error("operator[] container not a list");
-            }
-
-            return std::get<JsonListNode>(*this);
+            return std::get<JsonListNode>(*this)[key];
         }
     };
 
@@ -192,7 +238,7 @@ struct Json
     struct JsonResult
     {
         JsonNodeSPtr json;
-        std::string error;
+        const std::string error;
     };
 
     bool loadFrom(const std::string& path)
@@ -208,18 +254,20 @@ struct Json
 
         if (result.error.empty() && result.json != nullptr)
         {
-            printJson(*result.json);
+            // printJson(*result.json);
             printf("\n");
 
             JsonRootNode& obj = *result.json;
 
             try
             {
-                std::string& myStr = obj["company"]["departments"][0]["name"].getString();
-                const JsonObjectNode& oNode = obj["company"].getObject();
-                // for (const auto& [k, v] : oNode) {
-                printJsonObject(oNode);
-                // }
+                // JsonObjectNode obj;
+                // obj["ce"] = JsonListNode{JsonListNode{}, JsonListNode{1, 32}, JsonNull{},
+                //     JsonObjectNode{{"ceva", JsonListNode{}}}, 34.4, 34.44, 34.4453};
+
+                // printJsonObject(obj);
+                printJson(obj);
+                printf("\n");
             }
             catch (const std::exception& e)
             {
@@ -262,7 +310,19 @@ struct Json
             {
                 /* Dump away any spaces and new lines */
                 // TODO: accumulate spaces when in "string gathering" mode
-                case ' ':
+                case ' ': {
+                    if (state == State::GOT_STRING_KEY_VALUE_OPENING_QUOTE ||
+                        state == State::GETTING_STRING_KEY_VALUE_CHARS)
+                    {
+                        secondaryAcc += currentChar;
+                    }
+                    else if (state == State::GOT_BRAKET_STRING_OPENING_QUOTE ||
+                             state == State::GETTING_BRAKET_STRING_CHARS)
+                    {
+                        primaryAcc += currentChar;
+                    }
+                    break;
+                }
                 case '\n': {
                     break;
                 }
@@ -397,12 +457,12 @@ struct Json
                             if (secondaryAcc.contains('.'))
                             {
                                 double theNumber = std::stod(secondaryAcc);
-                                std::get<JsonListNode>(*currentNode).push_back(JsonFieldValue{theNumber});
+                                std::get<JsonListNode>(*currentNode).push_back(theNumber);
                             }
                             else
                             {
                                 int64_t theNumber = std::stoi(secondaryAcc);
-                                std::get<JsonListNode>(*currentNode).push_back(JsonFieldValue{theNumber});
+                                std::get<JsonListNode>(*currentNode).push_back(theNumber);
                             }
                             primaryAcc.clear();
                             secondaryAcc.clear();
@@ -436,7 +496,7 @@ struct Json
                         JSON_CHANGE_STATE(State::GOT_STRING_KEY_VALUE_CLOSING_QUOTE);
                         // printlne("map key value is: %s", secondaryAcc.c_str());
 
-                        std::get<JsonObjectNode>(*currentNode)[primaryAcc] = secondaryAcc;
+                        std::get<JsonObjectNode>(*currentNode)[primaryAcc] = std::move(secondaryAcc);
                         primaryAcc.clear();
                         secondaryAcc.clear();
                     }
@@ -449,7 +509,7 @@ struct Json
                         JSON_CHANGE_STATE(State::GOT_BRAKET_STRING_CLOSING_QUOTE);
                         // printlne("list value is: %s", primaryAcc.c_str());
 
-                        std::get<JsonListNode>(*currentNode).push_back(primaryAcc);
+                        std::get<JsonListNode>(*currentNode).emplace_back(primaryAcc);
                         primaryAcc.clear();
                     }
                     break;
@@ -570,12 +630,12 @@ struct Json
                                         readBackChars++;
                                         if (state == State::GOT_DOUBLE_DOT_SEPATATOR)
                                         {
-                                            std::get<JsonObjectNode>(*currentNode)[primaryAcc] = JsonNull{};
+                                            std::get<JsonObjectNode>(*currentNode)[primaryAcc] = std::move(JsonNull{});
                                             primaryAcc.clear();
                                         }
                                         else if (state == State::GOT_BRAKET_OPENING_TOKEN)
                                         {
-                                            std::get<JsonListNode>(*currentNode).push_back(JsonNull{});
+                                            std::get<JsonListNode>(*currentNode).emplace_back(JsonNull{});
                                         }
 
                                         JSON_CHANGE_STATE(State::GOT_NULL_TOKEN);
@@ -607,7 +667,7 @@ struct Json
                                         }
                                         else if (state == State::GOT_BRAKET_OPENING_TOKEN)
                                         {
-                                            std::get<JsonListNode>(*currentNode).push_back(true);
+                                            std::get<JsonListNode>(*currentNode).emplace_back(true);
                                         }
 
                                         JSON_CHANGE_STATE(State::GOT_TRUE_TOKEN);
@@ -642,7 +702,7 @@ struct Json
                                             }
                                             else if (state == State::GOT_BRAKET_OPENING_TOKEN)
                                             {
-                                                std::get<JsonListNode>(*currentNode).push_back(false);
+                                                std::get<JsonListNode>(*currentNode).emplace_back(false);
                                             }
 
                                             JSON_CHANGE_STATE(State::GOT_FALSE_TOKEN);
@@ -685,6 +745,7 @@ struct Json
         {
             printJsonList(std::get<JsonListNode>(node), 0);
         }
+        printf("\n");
     }
 
     void printJsonObject(const JsonObjectNode& objNode, uint32_t depth = 0)
@@ -785,8 +846,7 @@ struct Json
             // println("[%d] State is already %s", line, getStateString(newState).c_str());
             return;
         }
-        // println("[%d] Switching from %s to %s", line, getStateString(state).c_str(),
-        // getStateString(newState).c_str());
+        println("[%d] Switching from %s to %s", line, getStateString(state).c_str(), getStateString(newState).c_str());
         state = newState;
     }
 

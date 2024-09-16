@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <fstream>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -192,6 +191,26 @@ public:
         JsonFieldValue& operator[](const uint64_t key)
         {
             return std::get<JsonListNode>(*this)[key];
+        }
+
+        JsonObjectNode& getObject()
+        {
+            return std::get<JsonObjectNode>(*this);
+        }
+
+        JsonListNode& getList()
+        {
+            return std::get<JsonListNode>(*this);
+        }
+
+        bool isObject()
+        {
+            return std::holds_alternative<JsonObjectNode>(*this);
+        }
+
+        bool isList()
+        {
+            return std::holds_alternative<JsonListNode>(*this);
         }
     };
 

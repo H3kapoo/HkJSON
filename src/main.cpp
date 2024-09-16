@@ -19,18 +19,6 @@ int main(int, char**)
             "name": "CloudInfrastructure",
             "price": 999.99,
             "id": 1001
-        },
-        {
-            "releaseYear": 2022,
-            "supportedPlatforms": [
-                "Linux",
-                "Windows"
-            ],
-            "category": "Software",
-            "subscriptionBased": "no",
-            "name": "AIAnalytics",
-            "price": 1499.99,
-            "id": 1002
         }
     ]
     )");
@@ -45,12 +33,12 @@ int main(int, char**)
 
     hk::Json::JsonRootNode& obj = *result.json;
 
-    if (!obj[1].isObject())
+    if (obj.isObject() && obj.getObject().size() > 0 && !obj[0].isObject())
     {
         return -2;
     }
 
-    hk::Json::JsonObjectNode& theObject = obj[1].getObject();
+    hk::Json::JsonObjectNode& theObject = obj[0].getObject();
 
     for (const auto& [k, v] : theObject)
     {

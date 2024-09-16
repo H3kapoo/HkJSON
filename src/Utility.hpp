@@ -70,47 +70,47 @@ template <typename... Args> void println(std::format_string<Args...> fmt, Args&&
 /**
     @brief Read 1 byte and tell if stream has ended
 */
-bool isNextEOF(std::ifstream& stream);
+bool isNextEOF(std::istream& stream);
 
 /**
     @brief Read 1 byte from _stream_ and return uint8_t
 */
-uint8_t peek1(std::ifstream& stream);
+uint8_t peek1(std::istream& stream);
 
 /**
     @brief Read 1 byte from _stream_ and return int8_t
 */
-uint8_t read1(std::ifstream& stream);
+uint8_t read1(std::istream& stream);
 
 /**
     @brief Read 2 big endian bytes from _stream_ and return int16_t
 */
-uint16_t read2(std::ifstream& stream);
+uint16_t read2(std::istream& stream);
 
 /**
     @brief Read 4 big endian bytes from _stream_ and return int32_t
 */
-uint32_t read4(std::ifstream& stream);
+uint32_t read4(std::istream& stream);
 
 /**
     @brief Read 8 big endian bytes from _stream_ and return int64_t
 */
-uint64_t read8(std::ifstream& stream);
+uint64_t read8(std::istream& stream);
 
 /**
     @brief Read N bytes and return the vector it forms
 */
-std::vector<uint8_t> readBytes(std::ifstream& stream, uint32_t n);
+std::vector<uint8_t> readBytes(std::istream& stream, uint32_t n);
 
 /**
     @brief Read N bytes, supposedly ASCII and return the string it forms
 */
-std::string readStringBytes(std::ifstream& stream, uint32_t n);
+std::string readStringBytes(std::istream& stream, uint32_t n);
 
 /**
     @brief Determine if the next 12 bytes form the magic number
 */
-bool isMagicNumberNext(std::ifstream& stream);
+bool isMagicNumberNext(std::istream& stream);
 
 } // namespace utils
 

@@ -4,7 +4,8 @@
 int main(int argc, char** argv)
 {
     hk::Json json;
-    hk::Json::JsonResult result = json.loadFromFile("/home/hekapoo/Documents/probe/json/test.json");
+    // hk::Json::JsonResult result = json.loadFromFile("/home/hekapoo/Documents/probe/json/test.json");
+    hk::Json::JsonResult result = json.loadFromString(R"(["ceva", {"cumva" : "baa"}])");
 
     if (result.error.empty() && result.json != nullptr)
     {

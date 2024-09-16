@@ -205,7 +205,7 @@ public:
 
     JsonResult loadFromFile(const std::string& path);
     JsonResult loadFromString(const std::string& data);
-    JsonResult parseStream(std::ifstream& stream, const bool returnEarly = false);
+    JsonResult parseStream(std::istream& stream, const bool returnEarly = false);
 
     void printJson(const JsonRootNode& node);
     void printJsonObject(const JsonObjectNode& objNode, uint32_t depth = 0);
@@ -263,6 +263,8 @@ private:
         GOT_FALSE_TOKEN
     };
 
+    std::string sinkCharAndGetError(const char currentChar, State& currentState, const bool fileEnded = false);
+    bool isSpecialString(std::istream& stream, const std::string& specialStr);
     void changeState(State& state, State newState, uint32_t line);
     std::string getStateString(const State& state);
 }; // namespace hk

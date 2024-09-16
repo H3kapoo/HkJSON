@@ -1,6 +1,8 @@
 #include "HkJson.hpp"
 
 #include "Utility.hpp"
+#include <memory>
+#include <sstream>
 
 namespace hk
 {
@@ -9,7 +11,15 @@ Json::JsonResult Json::loadFromFile(const std::string& path)
     std::ifstream jsonFile{path};
     if (jsonFile.fail())
     {
-        return {.json = nullptr, .error = std::format("Failed to load: {}", path)};
+        std::string errBuff;
+        sprint(errBuff, "Failed to load: %s", path.c_str());
+        return {.json = nullptr, .error = errBuff};
+    }
+
+    /* Empty file */
+    if (utils::isNextEOF(jsonFile))
+    {
+        return {.json = std::make_shared<JsonRootNode>(JsonObjectNode{}), .error = ""};
     }
 
     return parseStream(jsonFile);
@@ -17,22 +27,23 @@ Json::JsonResult Json::loadFromFile(const std::string& path)
 
 Json::JsonResult Json::loadFromString(const std::string& data)
 {
-    // std::ifstream jsonFile{path};
-    // if (jsonFile.fail())
-    // {
-    //     return {.json = nullptr, .error = std::format("Failed to load: {}", path)};
-    // }
+    /* Empty string */
+    if (data.empty())
+    {
+        return {.json = std::make_shared<JsonRootNode>(JsonObjectNode{}), .error = ""};
+    }
 
-    // return parseStream(jsonFile);
-    return {};
+    std::istringstream inputStringStream(data);
+    return parseStream(inputStringStream);
 }
 
-Json::JsonResult Json::parseStream(std::ifstream& stream, const bool returnEarly)
+Json::JsonResult Json::parseStream(std::istream& stream, const bool returnEarly)
 {
     char currentChar{0};
     std::string primaryAcc{};
     std::string secondaryAcc{};
     bool holdsObject{false};
+    bool maybeCommaExactlyBeforeEndToken{false};
 
     State state{State::GET_OPENING_TOKEN};
 
@@ -51,9 +62,18 @@ Json::JsonResult Json::parseStream(std::ifstream& stream, const bool returnEarly
             return {nullptr, errBuff};
         }
 
+        if (currentChar == ',')
+        {
+            maybeCommaExactlyBeforeEndToken = true;
+        }
+        else if (currentChar != ' ' && currentChar != '\n' && currentChar != '}' && currentChar != ']')
+        {
+            maybeCommaExactlyBeforeEndToken = false;
+        }
+
         switch (currentChar)
         {
-            /* Dump away any spaces and new lines (unless collecting strings) */
+            /* Dump away any spaces (unless collecting strings) and new lines */
             case ' ': {
                 if (state == State::GOT_STRING_KEY_VALUE_OPENING_QUOTE ||
                     state == State::GETTING_STRING_KEY_VALUE_CHARS)
@@ -108,6 +128,10 @@ Json::JsonResult Json::parseStream(std::ifstream& stream, const bool returnEarly
                     std::get<JsonListNode>(*currentNode).emplace_back(std::move(std::get<JsonObjectNode>(*out.json)));
                     JSON_CHANGE_STATE(State::GOT_BRAKET_CURLY_CLOSING_TOKEN);
                 }
+                else
+                {
+                    return {.json = nullptr, .error = sinkCharAndGetError(currentChar, state)};
+                }
                 break;
             }
             case '[': {
@@ -157,6 +181,12 @@ Json::JsonResult Json::parseStream(std::ifstream& stream, const bool returnEarly
                     state == State::GETTING_NUMBER_KEY_VALUE_CHARS || state == State::GOT_TRUE_TOKEN ||
                     state == State::GOT_FALSE_TOKEN || state == State::GOT_NULL_TOKEN)
                 {
+
+                    if (maybeCommaExactlyBeforeEndToken)
+                    {
+                        return {.json = nullptr, .error = sinkCharAndGetError(currentChar, state)};
+                    }
+
                     if (state == State::GETTING_NUMBER_KEY_VALUE_CHARS)
                     {
                         if (secondaryAcc.contains('.'))
@@ -187,6 +217,11 @@ Json::JsonResult Json::parseStream(std::ifstream& stream, const bool returnEarly
                     state == State::GETTING_NUMBER_KEY_VALUE_CHARS || state == State::GOT_TRUE_TOKEN ||
                     state == State::GOT_FALSE_TOKEN || state == State::GOT_NULL_TOKEN)
                 {
+                    if (maybeCommaExactlyBeforeEndToken)
+                    {
+                        return {.json = nullptr, .error = sinkCharAndGetError(currentChar, state)};
+                    }
+
                     if (state == State::GETTING_NUMBER_KEY_VALUE_CHARS)
                     {
                         if (secondaryAcc.contains('.'))
@@ -357,110 +392,62 @@ Json::JsonResult Json::parseStream(std::ifstream& stream, const bool returnEarly
                         JSON_CHANGE_STATE(State::GETTING_NUMBER_KEY_VALUE_CHARS);
                         secondaryAcc += currentChar;
                     }
-                    else if (currentChar == 'n')
+                    else if (currentChar == 'n' && isSpecialString(stream, "ull")) // null
                     {
-                        int8_t readBackChars{0};
-                        if (utils::read1(stream) == 'u')
-                        {
-                            readBackChars++;
-                            if (utils::read1(stream) == 'l')
-                            {
-                                readBackChars++;
-                                if (utils::read1(stream) == 'l')
-                                {
-                                    readBackChars++;
-                                    if (state == State::GOT_DOUBLE_DOT_SEPATATOR)
-                                    {
-                                        std::get<JsonObjectNode>(*currentNode)[primaryAcc] = std::move(JsonNull{});
-                                        primaryAcc.clear();
-                                    }
-                                    else if (state == State::GOT_BRAKET_OPENING_TOKEN)
-                                    {
-                                        std::get<JsonListNode>(*currentNode).emplace_back(JsonNull{});
-                                    }
 
-                                    JSON_CHANGE_STATE(State::GOT_NULL_TOKEN);
-                                }
-                            }
+                        if (state == State::GOT_DOUBLE_DOT_SEPATATOR)
+                        {
+                            std::get<JsonObjectNode>(*currentNode)[primaryAcc] = std::move(JsonNull{});
+                            primaryAcc.clear();
+                        }
+                        else if (state == State::GOT_BRAKET_OPENING_TOKEN)
+                        {
+                            std::get<JsonListNode>(*currentNode).emplace_back(JsonNull{});
                         }
 
-                        if (state != State::GOT_TRUE_TOKEN)
-                        {
-                            stream.seekg(-readBackChars, std::ios::cur);
-                        }
+                        JSON_CHANGE_STATE(State::GOT_NULL_TOKEN);
                     }
-                    else if (currentChar == 't')
+                    else if (currentChar == 't' && isSpecialString(stream, "rue")) // true
                     {
-                        int8_t readBackChars{0};
-                        if (utils::read1(stream) == 'r')
+                        if (state == State::GOT_DOUBLE_DOT_SEPATATOR)
                         {
-                            readBackChars++;
-                            if (utils::read1(stream) == 'u')
-                            {
-                                readBackChars++;
-                                if (utils::read1(stream) == 'e')
-                                {
-                                    readBackChars++;
-                                    if (state == State::GOT_DOUBLE_DOT_SEPATATOR)
-                                    {
-                                        std::get<JsonObjectNode>(*currentNode)[primaryAcc] = true;
-                                        primaryAcc.clear();
-                                    }
-                                    else if (state == State::GOT_BRAKET_OPENING_TOKEN)
-                                    {
-                                        std::get<JsonListNode>(*currentNode).emplace_back(true);
-                                    }
-
-                                    JSON_CHANGE_STATE(State::GOT_TRUE_TOKEN);
-                                }
-                            }
+                            std::get<JsonObjectNode>(*currentNode)[primaryAcc] = true;
+                            primaryAcc.clear();
+                        }
+                        else if (state == State::GOT_BRAKET_OPENING_TOKEN)
+                        {
+                            std::get<JsonListNode>(*currentNode).emplace_back(true);
                         }
 
-                        if (state != State::GOT_TRUE_TOKEN)
-                        {
-                            stream.seekg(-readBackChars, std::ios::cur);
-                        }
+                        JSON_CHANGE_STATE(State::GOT_TRUE_TOKEN);
                     }
-                    else if (currentChar == 'f')
+                    else if (currentChar == 'f' && isSpecialString(stream, "alse")) // false
                     {
-                        int8_t readBackChars{0};
-                        if (utils::read1(stream) == 'a')
-                        {
-                            readBackChars++;
-                            if (utils::read1(stream) == 'l')
-                            {
-                                readBackChars++;
-                                if (utils::read1(stream) == 's')
-                                {
-                                    readBackChars++;
-                                    if (utils::read1(stream) == 'e')
-                                    {
-                                        readBackChars++;
-                                        if (state == State::GOT_DOUBLE_DOT_SEPATATOR)
-                                        {
-                                            std::get<JsonObjectNode>(*currentNode)[primaryAcc] = false;
-                                            primaryAcc.clear();
-                                        }
-                                        else if (state == State::GOT_BRAKET_OPENING_TOKEN)
-                                        {
-                                            std::get<JsonListNode>(*currentNode).emplace_back(false);
-                                        }
 
-                                        JSON_CHANGE_STATE(State::GOT_FALSE_TOKEN);
-                                    }
-                                }
-                            }
+                        if (state == State::GOT_DOUBLE_DOT_SEPATATOR)
+                        {
+                            std::get<JsonObjectNode>(*currentNode)[primaryAcc] = false;
+                            primaryAcc.clear();
+                        }
+                        else if (state == State::GOT_BRAKET_OPENING_TOKEN)
+                        {
+                            std::get<JsonListNode>(*currentNode).emplace_back(false);
                         }
 
-                        if (state != State::GOT_FALSE_TOKEN)
-                        {
-                            stream.seekg(-readBackChars, std::ios::cur);
-                        }
+                        JSON_CHANGE_STATE(State::GOT_FALSE_TOKEN);
+                    }
+                    else
+                    {
+                        return {.json = nullptr, .error = sinkCharAndGetError(currentChar, state)};
                     }
                 }
                 else if (state == State::GETTING_NUMBER_KEY_VALUE_CHARS)
                 {
                     secondaryAcc += currentChar;
+                }
+                else
+                {
+                    return {.json = nullptr, .error = sinkCharAndGetError(currentChar, state)};
                 }
                 break;
             }
@@ -469,11 +456,122 @@ Json::JsonResult Json::parseStream(std::ifstream& stream, const bool returnEarly
 
     if (currentChar != 0 && state != State::GOT_CURLY_CLOSING_TOKEN && state != State::GOT_BRAKET_CLOSING_TOKEN)
     {
-        JSON_CHANGE_STATE(State::ERROR);
-        return {nullptr, "Ending curly or square bracket not found"};
+        return {nullptr, sinkCharAndGetError(currentChar, state, true)};
     }
 
     return {currentNode, ""};
+}
+
+std::string Json::sinkCharAndGetError(const char currentChar, State& state, const bool fileEnded)
+{
+    std::string errorStr;
+
+    if (fileEnded)
+    {
+        if (state == State::GETTING_BRAKET_STRING_CHARS)
+        {
+            sprint(errorStr, "List value incomplete. Couldn't finish list");
+        }
+        else if (currentChar != 0 && state != State::GOT_CURLY_CLOSING_TOKEN &&
+                 state != State::GOT_BRAKET_CLOSING_TOKEN)
+        {
+            errorStr = "Ending } or ] not found";
+        }
+    }
+    else if (fileEnded && state == State::GETTING_KEY_NAME_CHARS)
+    {
+        errorStr = "File ended without getting object's key closing quote";
+    }
+    else if (state == State::GOT_BRAKET_CURLY_CLOSING_TOKEN)
+    {
+        errorStr = "Missing comma between } and {";
+    }
+    else if (state == State::GOT_BRAKET_BRAKET_CLOSING_TOKEN)
+    {
+        errorStr = "Missing comma between ] and [";
+    }
+    else if (state == State::GOT_KEY_NAME_CLOSING_QUOTE)
+    {
+        errorStr = "Cannot close object which has key but no separator value (missing ':')";
+    }
+    else if (state == State::GOT_DOUBLE_DOT_SEPATATOR)
+    {
+        errorStr = "Cannot close object which has key but no valid value (got separator, missing value)";
+    }
+    else if (state == State::GOT_STRING_KEY_VALUE_CLOSING_QUOTE)
+    {
+        errorStr = "Missing ',' separator between object entries";
+    }
+    else if (state == State::GOT_STRING_KEY_VALUE_OPENING_QUOTE || state == State::GETTING_STRING_KEY_VALUE_CHARS ||
+             state == State::GETTING_BRAKET_STRING_CHARS)
+    {
+        errorStr = "Missing end quote for key's string value";
+    }
+    else if (state == State::GOT_CURLY_OPENING_TOKEN)
+    {
+        if (currentChar == '}')
+        {
+            sprint(errorStr, "Missplaced comma right before object close");
+        }
+        else
+        {
+            sprint(errorStr, "Name of object key needs to be surrounded by quotes, but got '%c' instead", currentChar);
+        }
+    }
+    else if (state == State::GOT_BRAKET_STRING_CLOSING_QUOTE)
+    {
+        sprint(errorStr, "Missing comma after list element end");
+    }
+    else if (state == State::GETTING_BRAKET_STRING_CHARS)
+    {
+        sprint(errorStr, "List value incomplete. Couldn't finish list");
+    }
+    else if (state == State::GOT_BRAKET_OPENING_TOKEN)
+    {
+        if (currentChar == ']')
+        {
+            sprint(errorStr, "Missplaced comma right before list close");
+        }
+        else
+        {
+            sprint(errorStr, "Invalid list value inside, got: '%c'", currentChar);
+        }
+    }
+    else if (state == State::GOT_MAP_KEY_VALUE_CLOSING_CURLY)
+    {
+        sprint(errorStr, "Curly opening token is missing ending token '}', got '%c' instead", currentChar);
+    }
+    else if (state == State::GET_OPENING_TOKEN)
+    {
+        sprint(errorStr, "Cannot start json file with '%c', it can only start with '[' or '{'", currentChar);
+    }
+    else
+    {
+        sprint(errorStr, "Invalid for char '%c' to follow next at: %s", currentChar, getStateString(state).c_str());
+    }
+
+    JSON_CHANGE_STATE(State::ERROR);
+    return errorStr;
+}
+
+bool Json::isSpecialString(std::istream& stream, const std::string& specialStr)
+{
+    uint8_t readChars{0};
+    for (const char& ch : specialStr)
+    {
+        if (utils::read1(stream) != ch)
+        {
+            break;
+        }
+        readChars++;
+    }
+
+    if (readChars != specialStr.size())
+    {
+        stream.seekg(-readChars, std::ios::cur);
+        return false;
+    }
+    return true;
 }
 
 void Json::printJson(const JsonRootNode& node)
@@ -587,8 +685,7 @@ void Json::changeState(State& state, State newState, uint32_t line)
         // println("[%d] State is already %s", line, getStateString(newState).c_str());
         return;
     }
-    // println("[%d] Switching from %s to %s", line, getStateString(state).c_str(),
-    // getStateString(newState).c_str());
+    println("[%d] Switching from %s to %s", line, getStateString(state).c_str(), getStateString(newState).c_str());
     state = newState;
 }
 

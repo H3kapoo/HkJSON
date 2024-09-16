@@ -685,7 +685,7 @@ void Json::changeState(State& state, State newState, uint32_t line)
         // println("[%d] State is already %s", line, getStateString(newState).c_str());
         return;
     }
-    println("[%d] Switching from %s to %s", line, getStateString(state).c_str(), getStateString(newState).c_str());
+    // println("[%d] Switching from %s to %s", line, getStateString(state).c_str(), getStateString(newState).c_str());
     state = newState;
 }
 

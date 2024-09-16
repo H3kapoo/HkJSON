@@ -1,38 +1,64 @@
 #include "HkJson.hpp"
 #include "Utility.hpp"
 
-int main(int argc, char** argv)
+int main(int, char**)
 {
     hk::Json json;
     // hk::Json::JsonResult result = json.loadFromFile("/home/hekapoo/Documents/probe/json/test.json");
-    hk::Json::JsonResult result = json.loadFromString(R"(["ceva", {"cumva" : "baa"}])");
-
-    if (result.error.empty() && result.json != nullptr)
-    {
-        json.printJson(*result.json);
-        printf("\n");
-
-        hk::Json::JsonRootNode& obj = *result.json;
-
-        try
+    hk::Json::JsonResult result = json.loadFromString(R"(
+    [
         {
-            // JsonObjectNode obj;
-            // obj["ce"] = JsonListNode{JsonListNode{}, JsonListNode{1, 32}, JsonNull{},
-            //     JsonObjectNode{{"ceva", JsonListNode{}}}, 34.4, 34.44, 34.4453};
-
-            // printJsonObject(obj);
-            // // printJson(obj);
-            // printf("data: %s\n", obj["items"][0]["kind"].getString().c_str());
-        }
-        catch (const std::exception& e)
+            "releaseYear": 2021,
+            "supportedPlatforms": [
+                "Linux",
+                "Windows",
+                "macOS"
+            ],
+            "category": "Software",
+            "subscriptionBased": "yes",
+            "name": "CloudInfrastructure",
+            "price": 999.99,
+            "id": 1001
+        },
         {
-            printlne("what -> %s", e.what());
+            "releaseYear": 2022,
+            "supportedPlatforms": [
+                "Linux",
+                "Windows"
+            ],
+            "category": "Software",
+            "subscriptionBased": "no",
+            "name": "AIAnalytics",
+            "price": 1499.99,
+            "id": 1002
         }
-    }
-    else
+    ]
+    )");
+
+    if (!result.error.empty())
     {
         printlne("%s", result.error.c_str());
-        printf("\n");
+        return -1;
     }
+
+    json.printJson(*result.json);
+
+    hk::Json::JsonRootNode& obj = *result.json;
+
+    if (!obj[1].isObject())
+    {
+        return -2;
+    }
+
+    hk::Json::JsonObjectNode& theObject = obj[1].getObject();
+
+    for (const auto& [k, v] : theObject)
+    {
+        if (v.isString())
+        {
+            println("kv: {%s : %s}", k.c_str(), v.getString().c_str());
+        }
+    }
+
     return 0;
 }

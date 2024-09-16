@@ -4,7 +4,6 @@
 int main(int, char**)
 {
     hk::Json json;
-    // hk::Json::JsonResult result = json.loadFromFile("/home/hekapoo/Documents/probe/json/test.json");
     hk::Json::JsonResult result = json.loadFromString(R"(
     [
         {

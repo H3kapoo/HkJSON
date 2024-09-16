@@ -99,8 +99,13 @@ public:
             : internalVariant{std::forward<FieldValueVariant>(val)}
         {}
 
+        _InternalFieldValue(const char* val)
+            : internalVariant{std::forward<FieldValueVariant>(val)}
+        {}
+
         // move assignment
         INIT_MOVE_ASSIGN(std::string);
+        INIT_MOVE_ASSIGN(const char*);
         INIT_MOVE_ASSIGN(JsonListNode);
         INIT_MOVE_ASSIGN(JsonObjectNode);
         INIT_MOVE_ASSIGN(JsonNull);

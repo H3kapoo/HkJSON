@@ -44,13 +44,28 @@ Please check ```src/main.cpp```.
 
     hk::Json::JsonRootNode& obj = *result.json;
 
-    if (obj.isObject() && obj.getObject().size() > 0 && !obj[0].isObject())
+    if (!obj.isList())
     {
-        return -2;
+        return 2;
     }
 
-    hk::Json::JsonObjectNode& theObject = obj[0].getObject();
+    if (obj.getList().size() < 1)
+    {
+        return 3;
+    }
 
+    if (!obj[0].isObject())
+    {
+        return 4;
+    }
+
+    Json::JsonObjectNode& theObject = obj[0].getObject();
+
+    // addition of arbitrary values at runtime/compile time is possible
+    theObject["some_key"] = Json::JsonListNode{
+        Json::JsonListNode{34, "something"}, Json::JsonListNode{Json::JsonNull{}}};
+
+    // iteration like on a normal container, which type checking
     for (const auto& [k, v] : theObject)
     {
         if (v.isString())
@@ -58,6 +73,10 @@ Please check ```src/main.cpp```.
             println("kv: {%s : %s}", k.c_str(), v.getString().c_str());
         }
     }
+
+    // json printing
+    json.printJson(*result.json);
+    printf("\n");
 ```
 ### Notes
  - Windows/MacOS not supported in CMakeLists but if you know what to put there, go on. No posix dependencies.

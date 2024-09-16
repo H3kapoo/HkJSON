@@ -3,8 +3,11 @@
 
 int main(int, char**)
 {
-    hk::Json json;
-    hk::Json::JsonResult result = json.loadFromString(R"(
+    using namespace hk;
+
+    Json json;
+    // Json::JsonResult result = json.loadFromFile("file");
+    Json::JsonResult result = json.loadFromString(R"(
     [
         {
             "releaseYear": 2021,
@@ -25,20 +28,33 @@ int main(int, char**)
     if (!result.error.empty())
     {
         printlne("%s", result.error.c_str());
-        return -1;
+        return 1;
     }
 
-    json.printJson(*result.json);
+    Json::JsonRootNode& obj = *result.json;
 
-    hk::Json::JsonRootNode& obj = *result.json;
-
-    if (obj.isObject() && obj.getObject().size() > 0 && !obj[0].isObject())
+    if (!obj.isList())
     {
-        return -2;
+        return 2;
     }
 
-    hk::Json::JsonObjectNode& theObject = obj[0].getObject();
+    if (obj.getList().size() < 1)
+    {
+        return 3;
+    }
 
+    if (!obj[0].isObject())
+    {
+        return 4;
+    }
+
+    Json::JsonObjectNode& theObject = obj[0].getObject();
+
+    // addition of arbitrary values at runtime/compile time is possible
+    theObject["some_key"] = Json::JsonListNode{
+        Json::JsonListNode{34, "something"}, Json::JsonListNode{Json::JsonNull{}}};
+
+    // iteration like on a normal container, which type checking
     for (const auto& [k, v] : theObject)
     {
         if (v.isString())
@@ -46,6 +62,10 @@ int main(int, char**)
             println("kv: {%s : %s}", k.c_str(), v.getString().c_str());
         }
     }
+
+    // json printing
+    json.printJson(*result.json);
+    printf("\n");
 
     return 0;
 }
